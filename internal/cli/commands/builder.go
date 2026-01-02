@@ -1,6 +1,8 @@
 package commands
 
 import (
+	"fmt"
+
 	"github.com/spf13/cobra"
 )
 
@@ -30,7 +32,7 @@ func BuildCommand(spec CommandSpec) *cobra.Command {
 		Use:     spec.Use,
 		Aliases: spec.Aliases,
 		Short:   spec.Short,
-		Args:    spec.Args,
+		Args:    wrapArgsWithUsage(spec.Args),
 		Run:     func(cmd *cobra.Command, args []string) {}, // no-op for doc generation
 	}
 
@@ -78,4 +80,23 @@ func BuildCommand(spec CommandSpec) *cobra.Command {
 	}
 
 	return cmd
+}
+
+// wrapArgsWithUsage wraps a cobra Args validator to show usage on error
+func wrapArgsWithUsage(validator cobra.PositionalArgs) cobra.PositionalArgs {
+	if validator == nil {
+		return nil
+	}
+
+	return func(cmd *cobra.Command, args []string) error {
+		err := validator(cmd, args)
+		if err != nil {
+			// Show usage when args validation fails
+			_ = cmd.Usage()
+			_, _ = fmt.Fprintln(cmd.ErrOrStderr())
+			// Return the original error (main.go will print it)
+			return err
+		}
+		return nil
+	}
 }

@@ -541,23 +541,14 @@ func FindEnvVarRefs(text string) []EnvVarInfo {
 
 		matches := vars.EnvOnly.FindAllStringSubmatchIndex(lineWithoutComment, -1)
 		for _, match := range matches {
-			// match[0:2] = full match, match[2:4] = ${VAR} capture, match[4:6] = $VAR capture
+			// match[0:2] = full match, match[2:4] = ${VAR} capture
 			fullStart, fullEnd := match[0], match[1]
 			fullMatch := lineWithoutComment[fullStart:fullEnd]
 
-			// Skip if this looks like a chain reference (contains a dot after the var name)
-			// Check the character after the match
-			if fullEnd < len(lineWithoutComment) && lineWithoutComment[fullEnd] == '.' {
-				continue
-			}
-
+			// Extract variable name from ${VAR}
 			var varName string
 			if match[2] != -1 {
-				// ${VAR} style
 				varName = lineWithoutComment[match[2]:match[3]]
-			} else if match[4] != -1 {
-				// $VAR style
-				varName = lineWithoutComment[match[4]:match[5]]
 			}
 
 			if varName == "" {

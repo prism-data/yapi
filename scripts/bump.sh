@@ -54,10 +54,7 @@ fi
 cd ..
 echo "Action built successfully"
 
-git tag "$NEW_VERSION"
-echo "Tagged $NEW_VERSION"
-
-# Sync version from git tag to all package.json files
+# Sync version to all package.json files
 VERSION_NUMBER="${NEW_VERSION#v}"
 echo "Syncing package.json files to version $VERSION_NUMBER..."
 
@@ -67,3 +64,9 @@ for pkg in $(git ls-files '*/package.json' 'package.json'); do
         echo "  Updated $pkg"
     fi
 done
+
+# Commit version bump and tag
+git add -A
+git commit -m "[release] $NEW_VERSION"
+git tag "$NEW_VERSION"
+echo "Committed and tagged $NEW_VERSION"

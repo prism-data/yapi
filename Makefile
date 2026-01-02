@@ -104,6 +104,12 @@ bump-major:
 	@./scripts/bump.sh major
 
 release:
+	@BRANCH=$$(git rev-parse --abbrev-ref HEAD); \
+	if [ "$$BRANCH" != "main" ] && [ "$$BRANCH" != "develop" ]; then \
+		echo "Error: Releases can only be made from 'main' or 'develop' branches"; \
+		echo "Current branch: $$BRANCH"; \
+		exit 1; \
+	fi
 	@echo "Pushing commits and tags to origin..."
 	@git push origin HEAD
 	@TAG=$$(git describe --tags --abbrev=0); \

@@ -3,6 +3,14 @@ set -e
 
 cd "$(git rev-parse --show-toplevel)" || exit 1
 
+# Only allow releases from main or develop branches
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+if [[ "$CURRENT_BRANCH" != "main" && "$CURRENT_BRANCH" != "develop" ]]; then
+    echo "Error: Releases can only be made from 'main' or 'develop' branches"
+    echo "Current branch: $CURRENT_BRANCH"
+    exit 1
+fi
+
 # Get highest semantic version tag (must match vX.Y.Z pattern)
 CURRENT_TAG=$(git tag -l 'v*.*.*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
 CURRENT_TAG=${CURRENT_TAG:-v0.0.0}

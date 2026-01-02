@@ -6,8 +6,8 @@
   "publisher": "yapi",
   "icon": "./images/fluffy.png",
   "repository": {
-     "type": "git",
-     "url": "https://github.com/jamierpond/yapi.git"
+    "type": "git",
+    "url": "https://github.com/jamierpond/yapi.git"
   },
   "engines": {
     "vscode": "^1.107.0"
@@ -77,8 +77,15 @@
     "languages": [
       {
         "id": "yaml",
-        "extensions": [".yapi", ".yapi.yml", ".yapi.yaml"],
-        "filenames": ["yapi.config.yml", "yapi.config.yaml"]
+        "extensions": [
+          ".yapi",
+          ".yapi.yml",
+          ".yapi.yaml"
+        ],
+        "filenames": [
+          "yapi.config.yml",
+          "yapi.config.yaml"
+        ]
       }
     ],
     "configuration": {
@@ -110,20 +117,21 @@
     "ovsx:publish": "npx ovsx publish --no-dependencies"
   },
   "devDependencies": {
-    "@yapi/vscode-webview": "workspace:*",
-    "@vscode/vsce": "^3.2.2",
-    "@types/vscode": "^1.107.0",
+    "@types/js-yaml": "^4.0.9",
     "@types/mocha": "^10.0.10",
     "@types/node": "22.x",
-    "typescript-eslint": "^8.48.1",
-    "eslint": "^9.39.1",
-    "typescript": "^5.9.3",
-    "ts-loader": "^9.5.4",
-    "webpack": "^5.103.0",
-    "webpack-cli": "^6.0.1",
+    "@types/vscode": "^1.107.0",
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
-    "@types/js-yaml": "^4.0.9"
+    "@vscode/vsce": "^3.2.2",
+    "@yapi/vscode-webview": "workspace:*",
+    "eslint": "^9.39.1",
+    "ovsx": "^0.10.7",
+    "ts-loader": "^9.5.4",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.48.1",
+    "webpack": "^5.103.0",
+    "webpack-cli": "^6.0.1"
   },
   "dependencies": {
     "@yapi/client": "workspace:*",

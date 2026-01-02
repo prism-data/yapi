@@ -12,3 +12,4 @@ expect:
     body:
       - .form.name == "John Doe"
       - .form.email == "john@example.com"
+

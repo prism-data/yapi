@@ -19,12 +19,28 @@
   font-display: swap;
 }
 
+/* Define the CSS variable that tokens.css references */
+:root {
+  --font-jetbrains-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+/* Override Tailwind's font-mono to use JetBrains Mono */
+@theme {
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-sans: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
 /* Scan UI package components for Tailwind classes */
 @source "../../../packages/ui/src/components/**/*.tsx";
 @source "./App.tsx";
 
 /* Put custom base styles in @layer base so they don't override utilities */
 @layer base {
+  /* Force JetBrains Mono on ALL elements */
+  *, *::before, *::after {
+    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+  }
+
   body {
     background:
       radial-gradient(circle at top left, rgba(255, 102, 0, 0.12), transparent 55%),
@@ -32,7 +48,7 @@
       var(--color-yapi-bg);
     color: var(--color-yapi-fg);
     font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-    font-size: 13px;
+    font-size: var(--vscode-editor-font-size, 14px);
     line-height: 1.6;
     overflow: hidden;
     width: 100vw;

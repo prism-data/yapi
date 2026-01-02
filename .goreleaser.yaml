@@ -2,27 +2,27 @@ version: 2
 project_name: yapi
 
 builds:
-  - main: ./cmd/yapi
+  - id: yapi
+    main: ./cmd/yapi
     binary: yapi
     ldflags:
       - -s -w
       - -X main.version={{.Version}}
       - -X main.commit={{.ShortCommit}}
       - -X main.date={{.Date}}
-    goos:
-      - linux
-      - darwin
-      - windows
-    goarch:
-      - amd64
-      - arm64
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
 
 archives:
-  - format: tar.gz
+  - id: yapi_archive
+    ids: [yapi]
+    formats: [tar.gz]
     name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
     format_overrides:
       - goos: windows
-        format: zip
+        formats: [zip]
 
 checksum:
   name_template: checksums.txt
@@ -35,6 +35,24 @@ changelog:
       - "^test:"
       - "^chore:"
       - "^[release]:"
+
+aurs:
+  - name: yapi-bin
+    ids: [yapi_archive]
+    homepage: "https://yapi.run/"
+    description: "The API client that lives in your terminal (and your git repo)"
+    license: "MIT"
+    maintainers:
+      - "Jamie Pond <yapi@pond.audio>"
+    private_key: "{{ .Env.AUR_SSH_KEY }}"
+    git_url: "ssh://aur@aur.archlinux.org/yapi-bin.git"
+    provides:
+      - yapi
+    conflicts:
+      - yapi
+    package: |-
+      install -Dm755 "./yapi" "${pkgdir}/usr/bin/yapi"
+      install -Dm644 "./LICENSE" "${pkgdir}/usr/share/licenses/yapi/LICENSE"
 
 homebrew_casks:
   - name: yapi

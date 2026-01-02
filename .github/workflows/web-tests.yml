@@ -4,14 +4,16 @@ on:
   push:
     branches: [ main ]
     paths:
-      - 'web/**'
+      - 'apps/web/**'
+      - 'packages/**'
       - 'cmd/**'
       - 'internal/**'
       - '.github/workflows/web-tests.yml'
   pull_request:
     branches: [ main ]
     paths:
-      - 'web/**'
+      - 'apps/web/**'
+      - 'packages/**'
       - 'cmd/**'
       - 'internal/**'
       - '.github/workflows/web-tests.yml'
@@ -37,14 +39,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build madea-blog-core
-        run: pnpm --filter madea-blog-core build
+      - name: Build web
+        run: pnpm build:web
 
       - name: Run unit tests
         run: pnpm test
-
-      - name: Build web
-        run: pnpm build:web
 
       - uses: actions/setup-go@v5
         with:
@@ -62,4 +61,5 @@ jobs:
           skip-install: true
           start: pnpm --filter web start --port 3000
           wait-on: http://localhost:3000/healthz
-          command: yapi test ./web/yapi -a -p 16
+          command: yapi test ./apps/web/yapi -a -p 16
+

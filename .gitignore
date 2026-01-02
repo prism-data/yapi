@@ -1,3 +1,6 @@
+# macOS
+.DS_Store
+
 webapp/.depends
 cli/cmd/yapi/yapi
 cli/fzf-refernce-dont-use
@@ -34,3 +37,12 @@ postman-collections
 here
 fish
 internal/cli/.DS_Store
+vscode/yapi/dist
+apps/vscode-webview/dist
+extensions/vscode-extension/dist
+web/.next/dev
+packages/ui/dist
+foo.md
+packages/client/dist
+make-smaller.md
+unipmorted.txt

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -32,13 +33,14 @@ type Result struct {
 
 // Options for execution
 type Options struct {
-	URLOverride  string
-	NoColor      bool
-	BinaryOutput bool
-	Insecure     bool
-	EnvOverrides map[string]string // Environment variables from project config
-	ProjectRoot  string            // Path to project root (for validation)
-	ProjectEnv   string            // Selected environment name (for validation)
+	URLOverride    string
+	NoColor        bool
+	BinaryOutput   bool
+	Insecure       bool
+	EnvOverrides   map[string]string // Environment variables from project config
+	ProjectRoot    string            // Path to project root (for validation)
+	ProjectEnv     string            // Selected environment name (for validation)
+	ConfigFilePath string            // Path to the yapi config file (for relative output_file resolution)
 }
 
 // Run executes a yapi request and returns the result.
@@ -79,6 +81,10 @@ func Run(ctx context.Context, exec executor.TransportFunc, req *domain.Request, 
 
 	// Write to output file if specified
 	if outputFile, ok := req.Metadata["output_file"]; ok && outputFile != "" {
+		// Resolve relative paths against the config file directory
+		if !filepath.IsAbs(outputFile) && opts.ConfigFilePath != "" {
+			outputFile = filepath.Join(filepath.Dir(opts.ConfigFilePath), outputFile)
+		}
 		if err := os.WriteFile(outputFile, []byte(body), 0600); err != nil {
 			return nil, fmt.Errorf("failed to write output file '%s': %w", outputFile, err)
 		}
@@ -338,9 +344,13 @@ func interpolateValue(chainCtx *ChainContext, v any) (any, error) {
 
 // AssertionResult holds the result of a single assertion
 type AssertionResult struct {
-	Expression string
-	Passed     bool
-	Error      error
+	Expression    string
+	Passed        bool
+	Error         error
+	ActualValue   string // The actual value from evaluation (for failed assertions)
+	ExpectedValue string // The expected value (for failed assertions)
+	LeftSide      string // The left side of comparison (e.g., ".id")
+	Operator      string // The operator (e.g., "==", "!=", ">", etc.)
 }
 
 // formatAssertionError creates a detailed error message for a failed assertion
@@ -476,6 +486,13 @@ func CheckExpectationsWithEnv(expect config.Expectation, result *Result, envVars
 			Passed:     passed && err == nil,
 			Error:      err,
 		}
+		// Capture assertion details for UI display
+		if detail != nil {
+			ar.ActualValue = detail.ActualValue
+			ar.ExpectedValue = detail.ExpectedValue
+			ar.LeftSide = detail.LeftSide
+			ar.Operator = detail.Operator
+		}
 		res.AssertionResults = append(res.AssertionResults, ar)
 
 		if err != nil {
@@ -518,6 +535,13 @@ func CheckExpectationsWithEnv(expect config.Expectation, result *Result, envVars
 				Expression: assertion,
 				Passed:     passed && err == nil,
 				Error:      err,
+			}
+			// Capture assertion details for UI display
+			if detail != nil {
+				ar.ActualValue = detail.ActualValue
+				ar.ExpectedValue = detail.ExpectedValue
+				ar.LeftSide = detail.LeftSide
+				ar.Operator = detail.Operator
 			}
 			res.AssertionResults = append(res.AssertionResults, ar)
 

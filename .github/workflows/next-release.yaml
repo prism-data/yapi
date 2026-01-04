@@ -1,9 +1,9 @@
-name: Release
+name: Next Release
 
 on:
   push:
-    tags:
-      - "v*"
+    branches: [next]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -15,27 +15,27 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          submodules: recursive
 
       - uses: actions/setup-go@v5
         with:
           go-version: stable
 
-      - name: Check required secrets
+      - name: Calculate version
+        id: version
         run: |
-          if [ -z "${{ secrets.POSTHOG_API_KEY }}" ]; then
-            echo "Error: POSTHOG_API_KEY secret is not set"
-            exit 1
-          fi
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          SHORT_HASH=$(git rev-parse --short HEAD)
+          echo "version=${LATEST_TAG}-next.${SHORT_HASH}" >> $GITHUB_OUTPUT
 
-      - uses: goreleaser/goreleaser-action@v6
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
         with:
           version: "~> v2"
-          args: release --clean
+          args: release --clean --config .goreleaser.next.yaml
         env:
-          GITHUB_TOKEN: ${{ secrets.HOMEBREW_GITHUB_PAT }}
-          POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
-          POSTHOG_API_HOST: https://us.i.posthog.com
-          AUR_SSH_KEY: ${{ secrets.AUR_SSH_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GORELEASER_CURRENT_TAG: ${{ steps.version.outputs.version }}
 
       - uses: ./.github/actions/setup-vscode-extension
 
@@ -49,6 +49,6 @@ jobs:
             echo "Error: No .vsix file found. Did the build step succeed?"
             exit 1
           fi
-          gh release upload "${{ github.ref_name }}" "$VSIX_FILE" --clobber
+          gh release upload "${{ steps.version.outputs.version }}" "$VSIX_FILE" --clobber
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

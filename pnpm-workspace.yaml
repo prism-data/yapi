@@ -1,8 +1,8 @@
 packages:
   - apps/*
-  - apps/web/madea-blog-core/packages/*
   - packages/*
-  - extensions/*
+  - packages/madea-blog-core/packages/*
+  - integrations/*
 
 ignoredBuiltDependencies:
   - keytar

@@ -507,13 +507,6 @@ Found a bug? Want to add WebSocket support? PRs are welcome\!
 - Are deployed to `next.yapi.run`
 - Do NOT update Homebrew or AUR
 
-**Resetting next after a release:**
-```bash
-git checkout next
-git reset --hard main
-git push origin next --force-with-lease
-```
-
 -----
 
 *Made with ☕ and Go.*

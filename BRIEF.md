@@ -1,1 +1,0 @@
-./internal/briefing/LLM_BRIEFING.md

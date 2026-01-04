@@ -24,8 +24,8 @@ jobs:
       - name: Calculate version and create tag
         id: version
         run: |
-          # Get latest stable tag (exclude -next tags)
-          LATEST_TAG=$(git tag --list 'v*' --sort=-v:refname | grep -v '\-next\.' | head -1)
+          # Get latest stable semver tag (v0.0.0 format, exclude -next tags)
+          LATEST_TAG=$(git tag --list 'v*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
           if [ -z "$LATEST_TAG" ]; then
             LATEST_TAG="v0.0.0"
           fi

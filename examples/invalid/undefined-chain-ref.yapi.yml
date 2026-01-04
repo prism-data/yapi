@@ -9,4 +9,4 @@ chain:
       type: "test"
       params:
         # This references a step that doesn't exist
-        track_index: $undefined_step.result.index
+        track_index: ${undefined_step.result.index}

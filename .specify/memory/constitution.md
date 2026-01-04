@@ -91,6 +91,7 @@ The yapi webapp MUST use yapi itself for all API interactions where feasible.
 - The webapp serves as a live demonstration of yapi capabilities
 - Friction discovered while dogfooding MUST inform CLI/core improvements
 - If a workflow is painful in the webapp, it's painful for users too
+- **`apps/web/yapi/` files MUST demonstrate best practices**: These files are living examples. When syntax or features change, update these files in the same PR. They should always showcase the latest yapi capabilities.
 
 **Rationale**: Eating our own dog food exposes usability issues before users hit them.
 The webapp is both a product and a continuous integration test for yapi itself.

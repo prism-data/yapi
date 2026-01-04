@@ -10,7 +10,7 @@ chain:
     rpc: SayHello
     plaintext: true
     body:
-      greeting: $get_todo.title
+      greeting: ${get_todo.title}
     expect:
       assert:
         - .reply == "hello delectus aut autem"

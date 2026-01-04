@@ -24,11 +24,21 @@ jobs:
       - name: Calculate version and create tag
         id: version
         run: |
-          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          # Get latest stable tag (exclude -next tags)
+          LATEST_TAG=$(git tag --list 'v*' --sort=-v:refname | grep -v '\-next\.' | head -1)
+          if [ -z "$LATEST_TAG" ]; then
+            LATEST_TAG="v0.0.0"
+          fi
           SHORT_HASH=$(git rev-parse --short HEAD)
           VERSION="${LATEST_TAG}-next.${SHORT_HASH}"
+          echo "Latest stable tag: $LATEST_TAG"
+          echo "HEAD commit: $SHORT_HASH"
+          echo "Creating tag: $VERSION"
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          git tag "$VERSION"
+          # Delete remote tag if it exists (in case of re-run)
+          git push origin ":refs/tags/${VERSION}" 2>/dev/null || true
+          git tag -f "$VERSION"
+          git push origin "$VERSION"
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6

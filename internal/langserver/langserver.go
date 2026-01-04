@@ -193,15 +193,18 @@ func validateAndNotify(ctx *glsp.Context, uri protocol.DocumentUri, text string)
 	var analysis *validation.Analysis
 	var err error
 
+	// Get file path for resolving relative env_files
+	configPath := uriToPath(uri)
+
 	// Use project-aware validation if available
 	if ok && doc.Project != nil {
-		analysis, err = validation.AnalyzeConfigStringWithProject(text, doc.Project, doc.ProjectRoot)
+		analysis, err = validation.AnalyzeConfigStringWithProjectAndPath(text, configPath, doc.Project, doc.ProjectRoot)
 	} else {
-		analysis, err = validation.AnalyzeConfigString(text)
+		analysis, err = validation.AnalyzeConfigStringWithProjectAndPath(text, configPath, nil, "")
 	}
 
 	if err != nil || analysis == nil {
-		analysis, err = validation.AnalyzeConfigString(text)
+		analysis, err = validation.AnalyzeConfigStringWithProjectAndPath(text, configPath, nil, "")
 	}
 	if err != nil {
 		// Catastrophic error - send one diagnostic and bail
@@ -598,13 +601,23 @@ func textDocumentDefinition(ctx *glsp.Context, params *protocol.DefinitionParams
 		return nil, nil
 	}
 
-	// No project context - can't find definitions
-	if doc.Project == nil {
-		return nil, nil
-	}
-
 	line := int(params.Position.Line)
 	char := int(params.Position.Character)
+
+	// First, check if cursor is on an env_files entry path
+	envFilePath := findEnvFilePathAtPosition(doc.Text, line, char)
+	if envFilePath != "" {
+		// Determine the base directory for resolving relative paths
+		baseDir := filepath.Dir(uriToPath(uri))
+		if doc.ProjectRoot != "" {
+			baseDir = doc.ProjectRoot
+		}
+
+		location := resolveEnvFileLocation(envFilePath, baseDir)
+		if location != nil {
+			return location, nil
+		}
+	}
 
 	// Find all env var references in the document
 	refs := validation.FindEnvVarRefs(doc.Text)
@@ -617,17 +630,102 @@ func textDocumentDefinition(ctx *glsp.Context, params *protocol.DefinitionParams
 				return nil, nil
 			}
 
-			// Find where this variable is defined
-			location, err := findVariableDefinition(ref.Name, doc.Project, doc.ProjectRoot)
-			if err != nil {
-				return nil, nil //nolint:nilerr // Definition not found is not an error
+			// Try project-based lookup first
+			if doc.Project != nil {
+				location, err := findVariableDefinition(ref.Name, doc.Project, doc.ProjectRoot)
+				if err == nil && location != nil {
+					return location, nil
+				}
 			}
 
-			return location, nil
+			// Fall back to config-level env_files lookup
+			baseDir := filepath.Dir(uriToPath(uri))
+			location := findVariableInConfigEnvFiles(doc.Text, ref.Name, baseDir)
+			if location != nil {
+				return location, nil
+			}
+
+			return nil, nil
 		}
 	}
 
 	return nil, nil
+}
+
+// findVariableInConfigEnvFiles looks for a variable in env_files defined in the config
+func findVariableInConfigEnvFiles(text string, varName string, baseDir string) *protocol.Location {
+	// Get env_files from the config
+	envFiles := validation.FindEnvFilesInConfig(text)
+
+	// Search each env file for the variable
+	for _, ef := range envFiles {
+		location, err := findVarPositionInEnvFile(baseDir, ef.Path, varName)
+		if err == nil && location != nil {
+			return location
+		}
+	}
+
+	return nil
+}
+
+// findEnvFilePathAtPosition checks if the cursor is on an env_files entry and returns the path
+func findEnvFilePathAtPosition(text string, line int, char int) string {
+	var root yaml.Node
+	if err := yaml.Unmarshal([]byte(text), &root); err != nil {
+		return ""
+	}
+
+	if len(root.Content) == 0 {
+		return ""
+	}
+
+	docNode := root.Content[0]
+	if docNode.Kind != yaml.MappingNode {
+		return ""
+	}
+
+	// Find env_files key
+	envFilesNode := findNodeInMapping(docNode, "env_files")
+	if envFilesNode == nil || envFilesNode.Kind != yaml.SequenceNode {
+		return ""
+	}
+
+	// Check each item in the env_files array
+	for _, item := range envFilesNode.Content {
+		// YAML line/column are 1-indexed, LSP is 0-indexed
+		itemLine := item.Line - 1
+		itemCol := item.Column - 1
+		itemEndCol := itemCol + len(item.Value)
+
+		if itemLine == line && char >= itemCol && char <= itemEndCol {
+			return item.Value
+		}
+	}
+
+	return ""
+}
+
+// resolveEnvFileLocation resolves an env file path and returns a location pointing to line 1
+func resolveEnvFileLocation(envFilePath string, baseDir string) *protocol.Location {
+	// Resolve relative path
+	fullPath := envFilePath
+	if !filepath.IsAbs(envFilePath) {
+		fullPath = filepath.Join(baseDir, envFilePath)
+	}
+
+	// Check if file exists
+	if _, err := os.Stat(fullPath); err != nil {
+		return nil // File doesn't exist, no navigation
+	}
+
+	// Return location at line 1, column 0
+	return &protocol.Location{
+		URI: "file://" + fullPath,
+		Range: protocol.Range{
+			Start: protocol.Position{Line: 0, Character: 0},
+			End:   protocol.Position{Line: 0, Character: 0},
+		},
+	}
 }
 
 // findVariableDefinition locates where a variable is defined

@@ -1,8 +1,12 @@
 package validation
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"yapi.run/cli/internal/config"
 )
 
 func hasDiagnostic(diags []Diagnostic, substr string) bool {
@@ -711,5 +715,452 @@ variables:
 				t.Errorf("GraphQL variable $%s incorrectly detected as env var", gqlVar)
 			}
 		}
+	}
+}
+
+func TestFindEnvFilesInConfig(t *testing.T) {
+	tests := []struct {
+		name     string
+		yaml     string
+		expected []EnvFileInfo
+	}{
+		{
+			name: "single env file",
+			yaml: `yapi: v1
+url: http://example.com
+env_files:
+  - .env.local`,
+			expected: []EnvFileInfo{
+				{Path: ".env.local", Line: 3, Col: 4},
+			},
+		},
+		{
+			name: "multiple env files",
+			yaml: `yapi: v1
+url: http://example.com
+env_files:
+  - .env.local
+  - .env.prod
+  - secrets.env`,
+			expected: []EnvFileInfo{
+				{Path: ".env.local", Line: 3, Col: 4},
+				{Path: ".env.prod", Line: 4, Col: 4},
+				{Path: "secrets.env", Line: 5, Col: 4},
+			},
+		},
+		{
+			name: "no env files",
+			yaml: `yapi: v1
+url: http://example.com`,
+			expected: []EnvFileInfo{},
+		},
+		{
+			name: "empty env files",
+			yaml: `yapi: v1
+url: http://example.com
+env_files: []`,
+			expected: []EnvFileInfo{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := FindEnvFilesInConfig(tt.yaml)
+
+			if len(result) != len(tt.expected) {
+				t.Fatalf("expected %d env files, got %d", len(tt.expected), len(result))
+			}
+
+			for i, exp := range tt.expected {
+				if result[i].Path != exp.Path {
+					t.Errorf("env file %d: expected path %q, got %q", i, exp.Path, result[i].Path)
+				}
+				if result[i].Line != exp.Line {
+					t.Errorf("env file %d: expected line %d, got %d", i, exp.Line, result[i].Line)
+				}
+				if result[i].Col != exp.Col {
+					t.Errorf("env file %d: expected col %d, got %d", i, exp.Col, result[i].Col)
+				}
+			}
+		})
+	}
+}
+
+func TestValidateEnvFilesExist(t *testing.T) {
+	// Create a temp directory with a test env file
+	tmpDir := t.TempDir()
+	envPath := filepath.Join(tmpDir, ".env.exists")
+	if err := os.WriteFile(envPath, []byte("VAR=value"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a config file in the temp directory
+	configPath := filepath.Join(tmpDir, "test.yapi.yml")
+
+	tests := []struct {
+		name            string
+		yaml            string
+		expectedCount   int
+		expectedMessage string
+	}{
+		{
+			name: "existing file no diagnostics",
+			yaml: `yapi: v1
+url: http://example.com
+env_files:
+  - .env.exists`,
+			expectedCount: 0,
+		},
+		{
+			name: "missing file generates warning",
+			yaml: `yapi: v1
+url: http://example.com
+env_files:
+  - .env.missing`,
+			expectedCount:   1,
+			expectedMessage: ".env.missing",
+		},
+		{
+			name: "mixed existing and missing",
+			yaml: `yapi: v1
+url: http://example.com
+env_files:
+  - .env.exists
+  - .env.missing1
+  - .env.missing2`,
+			expectedCount: 2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			diags := ValidateEnvFilesExist(tt.yaml, configPath)
+
+			if len(diags) != tt.expectedCount {
+				t.Errorf("expected %d diagnostics, got %d: %+v", tt.expectedCount, len(diags), diags)
+			}
+
+			if tt.expectedMessage != "" && len(diags) > 0 {
+				if !strings.Contains(diags[0].Message, tt.expectedMessage) {
+					t.Errorf("expected message containing %q, got %q", tt.expectedMessage, diags[0].Message)
+				}
+			}
+
+			// Check that diagnostics have proper line numbers
+			for _, d := range diags {
+				if d.Line < 0 {
+					t.Errorf("diagnostic has invalid line number: %d", d.Line)
+				}
+				if d.Severity != SeverityWarning {
+					t.Errorf("expected warning severity, got %v", d.Severity)
+				}
+			}
+		})
+	}
+}
+
+func TestValidateEnvFilesExistFromProject(t *testing.T) {
+	// Create a temp directory with test env files
+	tmpDir := t.TempDir()
+	envPath := filepath.Join(tmpDir, ".env.exists")
+	if err := os.WriteFile(envPath, []byte("VAR=value"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name          string
+		yaml          string
+		project       *config.ProjectConfigV1
+		expectedCount int
+	}{
+		{
+			name: "nil project returns no diagnostics",
+			yaml: `yapi: v1
+url: http://example.com
+env_files:
+  - .env.missing`,
+			project:       nil,
+			expectedCount: 0,
+		},
+		{
+			name: "project with existing env file",
+			yaml: `yapi: v1
+url: http://example.com`,
+			project: &config.ProjectConfigV1{
+				Environments: map[string]config.Environment{
+					"default": {
+						ConfigV1: config.ConfigV1{
+							EnvFiles: []string{".env.exists"},
+						},
+					},
+				},
+				DefaultEnvironment: "default",
+			},
+			expectedCount: 0,
+		},
+		{
+			name: "project with missing env file",
+			yaml: `yapi: v1
+url: http://example.com`,
+			project: &config.ProjectConfigV1{
+				Environments: map[string]config.Environment{
+					"default": {
+						ConfigV1: config.ConfigV1{
+							EnvFiles: []string{".env.missing"},
+						},
+					},
+				},
+				DefaultEnvironment: "default",
+			},
+			expectedCount: 1,
+		},
+		{
+			name: "config-level env_files missing",
+			yaml: `yapi: v1
+url: http://example.com
+env_files:
+  - .env.config-missing`,
+			project: &config.ProjectConfigV1{
+				Environments: map[string]config.Environment{
+					"default": {
+						ConfigV1: config.ConfigV1{
+							EnvFiles: []string{".env.exists"},
+						},
+					},
+				},
+				DefaultEnvironment: "default",
+			},
+			expectedCount: 1,
+		},
+		{
+			name: "both project and config-level missing",
+			yaml: `yapi: v1
+url: http://example.com
+env_files:
+  - .env.config-missing`,
+			project: &config.ProjectConfigV1{
+				Environments: map[string]config.Environment{
+					"default": {
+						ConfigV1: config.ConfigV1{
+							EnvFiles: []string{".env.project-missing"},
+						},
+					},
+				},
+				DefaultEnvironment: "default",
+			},
+			expectedCount: 2,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			diags := ValidateEnvFilesExistFromProject(tt.yaml, tt.project, tmpDir, "")
+
+			if len(diags) != tt.expectedCount {
+				t.Errorf("expected %d diagnostics, got %d: %+v", tt.expectedCount, len(diags), diags)
+			}
+
+			// Check that all diagnostics are warnings
+			for _, d := range diags {
+				if d.Severity != SeverityWarning {
+					t.Errorf("expected warning severity, got %v", d.Severity)
+				}
+			}
+		})
+	}
+}
+
+func TestAnalyzeConfigStringWithProjectAndPathAndOptions(t *testing.T) {
+	// Create temp directory with env file
+	tmpDir := t.TempDir()
+	envPath := filepath.Join(tmpDir, ".env.test")
+	if err := os.WriteFile(envPath, []byte("TEST_VAR=test-value"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name        string
+		yaml        string
+		configPath  string
+		project     *config.ProjectConfigV1
+		projectRoot string
+		opts        AnalyzeOptions
+		wantErrors  bool
+	}{
+		{
+			name: "basic config without project",
+			yaml: `yapi: v1
+url: http://example.com
+method: GET`,
+			configPath: filepath.Join(tmpDir, "test.yapi.yml"),
+			project:    nil,
+			wantErrors: false,
+		},
+		{
+			name: "project with no default environment picks first",
+			yaml: `yapi: v1
+url: http://example.com
+method: GET`,
+			configPath: filepath.Join(tmpDir, "test.yapi.yml"),
+			project: &config.ProjectConfigV1{
+				Environments: map[string]config.Environment{
+					"dev": {
+						ConfigV1: config.ConfigV1{
+							EnvFiles: []string{".env.test"},
+						},
+					},
+				},
+				DefaultEnvironment: "", // No default set
+			},
+			projectRoot: tmpDir,
+			wantErrors:  false,
+		},
+		{
+			name: "project with default environment",
+			yaml: `yapi: v1
+url: http://example.com
+method: GET`,
+			configPath: filepath.Join(tmpDir, "test.yapi.yml"),
+			project: &config.ProjectConfigV1{
+				Environments: map[string]config.Environment{
+					"prod": {
+						ConfigV1: config.ConfigV1{
+							EnvFiles: []string{".env.test"},
+						},
+					},
+				},
+				DefaultEnvironment: "prod",
+			},
+			projectRoot: tmpDir,
+			wantErrors:  false,
+		},
+		{
+			name: "invalid YAML returns error diagnostic",
+			yaml: `yapi: v1
+url: [invalid yaml`,
+			configPath: filepath.Join(tmpDir, "test.yapi.yml"),
+			project:    nil,
+			wantErrors: true,
+		},
+		{
+			name: "strict env mode with missing env file",
+			yaml: `yapi: v1
+url: http://example.com
+env_files:
+  - .env.nonexistent`,
+			configPath: filepath.Join(tmpDir, "test.yapi.yml"),
+			project:    nil,
+			opts:       AnalyzeOptions{StrictEnv: true},
+			wantErrors: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			analysis, err := AnalyzeConfigStringWithProjectAndPathAndOptions(
+				tt.yaml, tt.configPath, tt.project, tt.projectRoot, tt.opts,
+			)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if analysis == nil {
+				t.Fatal("expected analysis, got nil")
+			}
+			if analysis.HasErrors() != tt.wantErrors {
+				t.Errorf("HasErrors() = %v, want %v. Diagnostics: %+v",
+					analysis.HasErrors(), tt.wantErrors, analysis.Diagnostics)
+			}
+		})
+	}
+}
+
+func TestAnalyzeConfigFileWithOptions(t *testing.T) {
+	// Create temp directory with valid config
+	tmpDir := t.TempDir()
+	validConfig := `yapi: v1
+url: http://example.com
+method: GET`
+	validPath := filepath.Join(tmpDir, "valid.yapi.yml")
+	if err := os.WriteFile(validPath, []byte(validConfig), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name       string
+		path       string
+		opts       AnalyzeOptions
+		wantErrors bool
+	}{
+		{
+			name:       "valid config file",
+			path:       validPath,
+			opts:       AnalyzeOptions{},
+			wantErrors: false,
+		},
+		{
+			name:       "nonexistent file",
+			path:       filepath.Join(tmpDir, "nonexistent.yapi.yml"),
+			opts:       AnalyzeOptions{},
+			wantErrors: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			analysis, err := AnalyzeConfigFileWithOptions(tt.path, tt.opts)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if analysis == nil {
+				t.Fatal("expected analysis, got nil")
+			}
+			if analysis.HasErrors() != tt.wantErrors {
+				t.Errorf("HasErrors() = %v, want %v", analysis.HasErrors(), tt.wantErrors)
+			}
+		})
+	}
+}
+
+func TestAnalyzeConfigFile(t *testing.T) {
+	// Create temp directory with valid config
+	tmpDir := t.TempDir()
+	validConfig := `yapi: v1
+url: http://example.com
+method: GET`
+	validPath := filepath.Join(tmpDir, "valid.yapi.yml")
+	if err := os.WriteFile(validPath, []byte(validConfig), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	analysis, err := AnalyzeConfigFile(validPath)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if analysis == nil {
+		t.Fatal("expected analysis, got nil")
+	}
+	if analysis.HasErrors() {
+		t.Errorf("expected no errors, got: %+v", analysis.Diagnostics)
+	}
+}
+
+func TestExtractLineFromError(t *testing.T) {
+	tests := []struct {
+		errMsg   string
+		expected int
+	}{
+		{"line 22: cannot unmarshal", 21}, // 0-indexed
+		{"line 1: error", 0},
+		{"no line number here", -1},
+		{"", -1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.errMsg, func(t *testing.T) {
+			got := extractLineFromError(tt.errMsg)
+			if got != tt.expected {
+				t.Errorf("extractLineFromError(%q) = %d, want %d", tt.errMsg, got, tt.expected)
+			}
+		})
 	}
 }

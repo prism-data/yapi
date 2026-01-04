@@ -19,26 +19,17 @@ type HTTPClient interface {
 	Do(req *http.Request) (*http.Response, error)
 }
 
-// Factory creates transport functions for different protocols.
-type Factory struct {
-	Client HTTPClient
-}
-
-// NewFactory creates a new executor factory with the given HTTP client.
-func NewFactory(client HTTPClient) *Factory {
-	return &Factory{Client: client}
-}
-
-// Create returns the appropriate transport function for the given transport type.
+// GetTransport returns the appropriate transport function for the given transport type.
 // The returned function is wrapped with timing middleware.
-func (f *Factory) Create(transport string) (TransportFunc, error) {
+// This is the preferred entry point - use this instead of Factory.
+func GetTransport(transport string, client HTTPClient) (TransportFunc, error) {
 	var fn TransportFunc
 
 	switch transport {
 	case constants.TransportHTTP:
-		fn = HTTPTransport(f.Client)
+		fn = HTTPTransport(client)
 	case constants.TransportGraphQL:
-		fn = GraphQLTransport(f.Client)
+		fn = GraphQLTransport(client)
 	case constants.TransportGRPC:
 		fn = GRPCTransport
 	case constants.TransportTCP:

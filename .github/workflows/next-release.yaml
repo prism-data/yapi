@@ -21,12 +21,14 @@ jobs:
         with:
           go-version: stable
 
-      - name: Calculate version
+      - name: Calculate version and create tag
         id: version
         run: |
           LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
           SHORT_HASH=$(git rev-parse --short HEAD)
-          echo "version=${LATEST_TAG}-next.${SHORT_HASH}" >> $GITHUB_OUTPUT
+          VERSION="${LATEST_TAG}-next.${SHORT_HASH}"
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          git tag "$VERSION"
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6

@@ -47,6 +47,11 @@ mkdir -p /usr/local/bin
 cp ./bin/yapi /usr/local/bin/yapi
 chmod +x /usr/local/bin/yapi
 
+echo "Copying yapi to monorepo root bin/ for Next.js file tracing..."
+mkdir -p ../bin
+cp ./bin/yapi ../bin/yapi
+chmod +x ../bin/yapi
+
 echo "yapi installed: $(which yapi)"
 yapi version 2>/dev/null || true
 

@@ -27,6 +27,7 @@ type runContext struct {
 	envName      string // Target environment from yapi.config.yml
 	jsonOutput   bool   // If true, output structured JSON instead of formatted output
 	strictEnv    bool   // If true, error on missing env files and disable OS env fallback
+	verbose      bool   // If true, show verbose output (request details, timing, headers)
 }
 
 func (app *rootCommand) runInteractiveE(cmd *cobra.Command, args []string) error {
@@ -47,7 +48,8 @@ func (app *rootCommand) runE(cmd *cobra.Command, args []string) error {
 	envName, _ := cmd.Flags().GetString("env")
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	strictEnv, _ := cmd.Flags().GetBool("strict-env")
-	return app.runConfigPathWithOptionsE(path, envName, jsonOutput, strictEnv)
+	verbose, _ := cmd.Flags().GetBool("verbose")
+	return app.runConfigPathWithOptionsE(path, envName, jsonOutput, strictEnv, verbose)
 }
 
 func (app *rootCommand) watchE(cmd *cobra.Command, args []string) error {
@@ -128,8 +130,25 @@ func printWatchHeader(path string) {
 	fmt.Printf("%s\n\n", color.Dim("["+time.Now().Format("15:04:05")+"]"))
 }
 
+// OutputSavedError is returned when output is too large for terminal and was saved to file.
+type OutputSavedError struct {
+	Path string
+}
+
+func (e *OutputSavedError) Error() string {
+	return fmt.Sprintf("output saved to %s (too large for terminal)\nview with: cat %s | jq", e.Path, e.Path)
+}
+
+// printResultOptions configures printResult behavior.
+type printResultOptions struct {
+	skipMeta bool // Don't print URL/Time/Size (already shown in verbose mode)
+}
+
 // printResult outputs a single result with optional expectation.
-func (app *rootCommand) printResult(result *runner.Result, expectRes *runner.ExpectationResult) {
+// configPath is used for generating auto-save filenames when output is too large.
+// Returns OutputSavedError if output was saved to file instead of printed.
+func (app *rootCommand) printResult(result *runner.Result, expectRes *runner.ExpectationResult, configPath string, opts printResultOptions) error {
+	var savedPath string
 	if result != nil {
 		// Check if stdout is a TTY (terminal)
 		isTTY := isTerminal(os.Stdout)
@@ -137,28 +156,51 @@ func (app *rootCommand) printResult(result *runner.Result, expectRes *runner.Exp
 		// Check if content is binary
 		isBinary := utils.IsBinaryContent(result.Body)
 
-		// Skip dumping binary output unless explicitly requested with --binary-output
-		if isBinary && !app.binaryOutput {
+		switch {
+		case isBinary && !app.binaryOutput:
+			// Skip dumping binary output unless explicitly requested with --binary-output
 			if isTTY {
 				fmt.Fprintf(os.Stderr, "\n%s\n", color.Yellow("Binary content detected. Output hidden to prevent terminal corruption."))
 				fmt.Fprintf(os.Stderr, "%s\n", color.Dim("To display binary output, use --binary-output flag or pipe to a file."))
 			}
 			// In non-TTY (CI/piped), silently skip binary output
-		} else {
-			body := strings.TrimRight(output.Highlight(result.Body, result.ContentType, app.noColor), "\n\r")
-			fmt.Println(body)
+		case result.OutputFile != "":
+			// Output was already saved via output_file config - don't write again
+			if len(result.Body) > maxOutputSize {
+				savedPath = result.OutputFile
+			} else {
+				// Small enough to print, but also saved to file
+				body := output.Highlight(result.Body, result.ContentType, app.noColor)
+				fmt.Println(strings.TrimRight(body, "\n\r"))
+			}
+		default:
+			// No output_file specified - render normally (may auto-save if large)
+			body := result.Body
+			if len(body) <= maxOutputSize {
+				body = output.Highlight(body, result.ContentType, app.noColor)
+			}
+			outputResult := renderOutput(body, configPath)
+			savedPath = outputResult.SavedPath
 		}
 
-		printResultMeta(result)
+		if !opts.skipMeta {
+			printResultMeta(result)
+		}
 	}
 	if expectRes != nil {
 		printExpectationResult(expectRes)
 	}
+	if savedPath != "" {
+		return &OutputSavedError{Path: savedPath}
+	}
+	return nil
 }
 
 // executeRunE is the unified execution pipeline for both Run and Watch modes.
 // Returns error for middleware to capture.
 func (app *rootCommand) executeRunE(ctx runContext) error {
+	log := NewLogger(ctx.verbose)
+
 	opts := runner.Options{
 		URLOverride:    app.urlOverride,
 		NoColor:        app.noColor,
@@ -167,6 +209,8 @@ func (app *rootCommand) executeRunE(ctx runContext) error {
 		ConfigFilePath: ctx.path,
 		StrictEnv:      ctx.strictEnv,
 	}
+
+	log.Verbose("Loading config: %s", ctx.path)
 
 	// Load project and environment configuration
 	projEnv, err := loadProjectAndEnv(ctx.path, ctx.envName, true)
@@ -180,14 +224,24 @@ func (app *rootCommand) executeRunE(ctx runContext) error {
 
 	// Apply project settings if found
 	if projEnv != nil {
+		log.Verbose("Project: %s", projEnv.projectRoot)
 		opts.ProjectRoot = projEnv.projectRoot
 		if projEnv.envVars != nil {
+			log.Verbose("Environment: %s (%d vars)", projEnv.envName, len(projEnv.envVars))
 			opts.EnvOverrides = projEnv.envVars
 			opts.ProjectEnv = projEnv.envName
 		}
 	}
 
+	log.Verbose("Sending request...")
 	runRes := app.engine.RunConfig(context.Background(), ctx.path, opts)
+
+	// Log response details if available
+	if runRes.Result != nil {
+		log.Response(runRes.Result.StatusCode, runRes.Result.Headers, runRes.Result.Duration, runRes.Result.BodyBytes)
+	} else if runRes.Error != nil {
+		log.Verbose("Request failed: %v", runRes.Error)
+	}
 
 	// Handle validation/parse errors first
 	if runRes.Error != nil && runRes.Analysis == nil {
@@ -236,7 +290,9 @@ func (app *rootCommand) executeRunE(ctx runContext) error {
 		})
 	}
 
-	app.printResult(runRes.Result, runRes.ExpectRes)
+	if err := app.printResult(runRes.Result, runRes.ExpectRes, ctx.path, printResultOptions{skipMeta: ctx.verbose}); err != nil {
+		return err
+	}
 
 	if runRes.Error != nil {
 		if ctx.strict || ctx.returnErrors {
@@ -261,6 +317,7 @@ func (app *rootCommand) executeChain(ctx runContext, runRes *core.RunConfigResul
 	}
 
 	// Print results from all completed steps (even if chain failed)
+	var outputSavedErr error
 	if chainResult != nil {
 		for i, stepResult := range chainResult.Results {
 			fmt.Fprintf(os.Stderr, "\n--- Step %d: %s ---\n", i+1, chainResult.StepNames[i])
@@ -268,7 +325,9 @@ func (app *rootCommand) executeChain(ctx runContext, runRes *core.RunConfigResul
 			if i < len(chainResult.ExpectationResults) {
 				expectRes = chainResult.ExpectationResults[i]
 			}
-			app.printResult(stepResult, expectRes)
+			if err := app.printResult(stepResult, expectRes, ctx.path, printResultOptions{}); err != nil {
+				outputSavedErr = err
+			}
 		}
 	}
 
@@ -283,7 +342,7 @@ func (app *rootCommand) executeChain(ctx runContext, runRes *core.RunConfigResul
 	fmt.Fprintln(os.Stderr, "\nChain completed successfully.")
 	out, noColor := app.io(ctx.strict)
 	validation.PrintWarnings(runRes.Analysis, out, noColor)
-	return nil
+	return outputSavedErr
 }
 
 // runConfigPathE runs a config file in strict mode (returns error)
@@ -299,8 +358,8 @@ func (app *rootCommand) runConfigPathWithEnvAndJSONE(path string, envName string
 }
 
 // runConfigPathWithOptionsE runs a config file with all options
-func (app *rootCommand) runConfigPathWithOptionsE(path string, envName string, jsonOutput bool, strictEnv bool) error {
-	return app.executeRunE(runContext{path: path, strict: true, envName: envName, jsonOutput: jsonOutput, strictEnv: strictEnv})
+func (app *rootCommand) runConfigPathWithOptionsE(path string, envName string, jsonOutput bool, strictEnv bool, verbose bool) error {
+	return app.executeRunE(runContext{path: path, strict: true, envName: envName, jsonOutput: jsonOutput, strictEnv: strictEnv, verbose: verbose})
 }
 
 // printExpectationResult prints expectation results to stderr

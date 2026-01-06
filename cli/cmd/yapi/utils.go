@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"yapi.run/cli/internal/config"
 	"yapi.run/cli/internal/tui"
@@ -156,4 +157,117 @@ func isTerminal(f *os.File) bool {
 		return false
 	}
 	return (stat.Mode() & os.ModeCharDevice) != 0
+}
+
+// maxOutputSize is the threshold above which output is auto-saved to a file instead of printed.
+// 1MB is a reasonable limit - terminals struggle with larger outputs.
+const maxOutputSize = 1024 * 1024
+
+// OutputResult holds the result of rendering output.
+type OutputResult struct {
+	Printed   bool   // Output was printed to terminal
+	SavedPath string // If not empty, output was saved to this file
+	SaveErr   error  // If not nil, save failed with this error
+}
+
+// renderOutput prints body to stdout, or saves to a file if too large.
+// configPath is used to generate a meaningful filename for auto-saved files.
+// When output is saved to file, no message is printed - caller handles that via OutputSavedError.
+func renderOutput(body string, configPath string) OutputResult {
+	if len(body) <= maxOutputSize {
+		fmt.Println(strings.TrimRight(body, "\n\r"))
+		return OutputResult{Printed: true}
+	}
+
+	// Output too large - save to file
+	outputPath := generateOutputPath(configPath)
+	if err := os.WriteFile(outputPath, []byte(body), 0600); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to save large output: %v\n", err)
+		return OutputResult{SaveErr: err}
+	}
+
+	return OutputResult{SavedPath: outputPath}
+}
+
+// Logger provides leveled logging for verbose output.
+type Logger struct {
+	verbose bool
+}
+
+// NewLogger creates a logger. If verbose is false, Debug calls are no-ops.
+func NewLogger(verbose bool) *Logger {
+	return &Logger{verbose: verbose}
+}
+
+// Verbose prints a message only if verbose mode is enabled.
+func (l *Logger) Verbose(format string, args ...any) {
+	if !l.verbose {
+		return
+	}
+	fmt.Fprintf(os.Stderr, "[VERBOSE] "+format+"\n", args...)
+}
+
+// Section prints a section header only if verbose mode is enabled.
+func (l *Logger) Section(name string) {
+	if !l.verbose {
+		return
+	}
+	fmt.Fprintf(os.Stderr, "\n=== %s ===\n", name)
+}
+
+// Request logs request details in verbose mode.
+func (l *Logger) Request(method, url string, headers map[string]string, body string) {
+	if !l.verbose {
+		return
+	}
+	l.Section("REQUEST")
+	fmt.Fprintf(os.Stderr, "%s %s\n", method, url)
+
+	if len(headers) > 0 {
+		fmt.Fprintln(os.Stderr, "\nHeaders:")
+		for k, v := range headers {
+			fmt.Fprintf(os.Stderr, "  %s: %s\n", k, v)
+		}
+	}
+
+	if body != "" {
+		fmt.Fprintln(os.Stderr, "\nBody:")
+		if len(body) > 1000 {
+			fmt.Fprintf(os.Stderr, "  %s... (%d bytes total)\n", body[:1000], len(body))
+		} else {
+			fmt.Fprintf(os.Stderr, "  %s\n", body)
+		}
+	}
+	fmt.Fprintln(os.Stderr, "")
+}
+
+// Response logs response details in verbose mode.
+func (l *Logger) Response(statusCode int, headers map[string]string, duration time.Duration, bodySize int) {
+	if !l.verbose {
+		return
+	}
+	l.Section("RESPONSE")
+	fmt.Fprintf(os.Stderr, "Status: %d\n", statusCode)
+	fmt.Fprintf(os.Stderr, "Time: %s\n", duration)
+	fmt.Fprintf(os.Stderr, "Size: %s\n", formatBytes(bodySize))
+
+	if len(headers) > 0 {
+		fmt.Fprintln(os.Stderr, "\nHeaders:")
+		for k, v := range headers {
+			fmt.Fprintf(os.Stderr, "  %s: %s\n", k, v)
+		}
+	}
+	fmt.Fprintln(os.Stderr, "")
+}
+
+// generateOutputPath creates a filename like: config-name-output-20060102-150405.json
+func generateOutputPath(configPath string) string {
+	base := filepath.Base(configPath)
+	name := strings.TrimSuffix(base, ".yapi.yml")
+	if name == base {
+		name = strings.TrimSuffix(base, filepath.Ext(base))
+	}
+
+	timestamp := time.Now().Format("20060102-150405")
+	return fmt.Sprintf("%s-output-%s.json", name, timestamp)
 }

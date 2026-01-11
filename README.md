@@ -379,7 +379,7 @@ yapi stress checkout-flow.yapi.yml -e prod -n 500 -p 25
 
 ## 🔄 CI/CD Integration (GitHub Actions)
 
-Run your yapi tests automatically in GitHub Actions with service orchestration and health checks built-in.
+Run your yapi tests automatically in GitHub Actions.
 
 ```yaml
 name: Integration Tests
@@ -391,46 +391,31 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install dependencies
-        run: npm install
-
       - name: Run Yapi Integration Tests
-        uses: jamierpond/yapi/action@0.X.X # specify version, or use @main for latest
+        uses: jamierpond/yapi/integrations/github-action@main
         with:
-          # Start your service in the background
-          start: npm run dev
-
-          # Wait for it to be healthy
-          wait-on: http://localhost:3000/health
-
-          # Run your test suite
-          command: yapi test ./tests -a
+          command: yapi test ./tests
 ```
 
-**Features:**
-- Automatically installs yapi CLI
-- Starts background services (web servers, APIs, databases)
-- Waits for health checks before running tests
-- Fails the workflow if tests fail
+Configure server startup and health checks in your `yapi.config.yml`:
 
-**Multiple services example:**
 ```yaml
-- uses: jamierpond/yapi/action@0.X.X # specify version, or use @main for latest
-  with:
-    start: |
-      docker-compose up -d
-      pnpm --filter api dev
-    wait-on: |
-      http://localhost:8080/health
-      http://localhost:3000/ready
-    command: yapi test ./integration -a
+yapi: v1
+
+test:
+  start: "npm run dev"
+  wait_on:
+    - "http://localhost:3000/health"
+  timeout: 60s
+
+environments:
+  local:
+    url: http://localhost:3000
 ```
 
-See the [action documentation](https://github.com/jamierpond/yapi/tree/main/action) for more options.
+The action installs yapi, starts your server, waits for health checks, runs tests, then cleans up.
+
+See the [action documentation](https://github.com/jamierpond/yapi/tree/main/integrations/github-action) for more options.
 
 -----
 

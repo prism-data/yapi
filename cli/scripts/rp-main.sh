@@ -4,5 +4,3 @@ cd "$git_root" || exit 1
 
 "$HOME/.config/bin/scripts/repo-print" cmd internal -e ".*test.go$"
 
-cat ./.specify/memory/constitution.md
-

@@ -1,4 +1,9 @@
 import assert from "assert";
+
+function getGitHubToken(): string | undefined {
+  return process.env.GITHUB_TOKEN;
+}
+
 // GraphQL response types
 type Asset = {
   name: string;
@@ -93,7 +98,7 @@ async function fetchAllReleases(token: string) {
 
 export async function getGitHubStats(): Promise<{ stars: number | null; forks: number | null }> {
   try {
-    const token = process.env.GITHUB_TOKEN;
+    const token = getGitHubToken();
     assert(token, "GitHub token is required");
     const res = await fetch("https://api.github.com/repos/jamierpond/yapi", {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -122,7 +127,7 @@ export async function getGitHubStars(): Promise<number | null> {
 
 export async function getTotalDownloads(): Promise<number | null> {
   try {
-    const token = process.env.GITHUB_TOKEN;
+    const token = getGitHubToken();
     if (!token) return null;
 
     const { nodes } = await fetchAllReleases(token);

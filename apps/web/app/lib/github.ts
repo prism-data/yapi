@@ -122,7 +122,7 @@ export async function getGitHubStars(): Promise<number | null> {
 
 export async function getTotalDownloads(): Promise<number | null> {
   try {
-    const token = process.env.GITHUB_PAT;
+    const token = process.env.GITHUB_TOKEN;
     if (!token) return null;
 
     const { nodes } = await fetchAllReleases(token);

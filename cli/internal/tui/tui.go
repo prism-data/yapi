@@ -100,13 +100,13 @@ func findFilesInRepo(dir, searchRoot string, includeProjectConfig bool, results 
 
 	return filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			return nil
+			return nil //nolint:nilerr // skip inaccessible files, continue walking
 		}
 
 		// Get path relative to repo root for gitignore matching
 		relToRepo, err := filepath.Rel(repoRoot, path)
 		if err != nil {
-			return nil
+			return nil //nolint:nilerr // skip files with path errors
 		}
 
 		pathComponents := strings.Split(filepath.ToSlash(relToRepo), "/")
@@ -141,7 +141,7 @@ func findFilesInRepo(dir, searchRoot string, includeProjectConfig bool, results 
 		// Get path relative to search root for display
 		relPath, err := filepath.Rel(searchRoot, path)
 		if err != nil {
-			return nil
+			return nil //nolint:nilerr // skip files with path errors
 		}
 
 		// Match .yapi.yml files

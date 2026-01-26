@@ -4,11 +4,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 
 	"yapi.run/cli/internal/vars"
 )
+
+// arrayIndexPattern matches path segments with array indices like "tracks[0]" or "items[123]"
+var arrayIndexPattern = regexp.MustCompile(`^(.+?)\[(\d+)\]$`)
 
 // StepResult holds the output of a single chain step.
 type StepResult struct {
@@ -142,18 +146,9 @@ func (c *ChainContext) resolveChainVar(key string) (string, error) {
 }
 
 func jsonPathLookup(data any, path []string) (string, error) {
-	current := data
-	for i, key := range path {
-		switch v := current.(type) {
-		case map[string]any:
-			val, ok := v[key]
-			if !ok {
-				return "", fmt.Errorf("key '%s' not found at path '%s'", key, strings.Join(path[:i+1], "."))
-			}
-			current = val
-		default:
-			return "", fmt.Errorf("path segment '%s' is not an object", strings.Join(path[:i], "."))
-		}
+	current, err := jsonPathLookupRaw(data, path)
+	if err != nil {
+		return "", err
 	}
 	// Convert final value to string
 	switch v := current.(type) {
@@ -235,19 +230,46 @@ func (c *ChainContext) ResolveVariableRaw(input string) (any, bool) {
 	return val, true
 }
 
-// jsonPathLookupRaw returns the raw typed value at the given path
+// jsonPathLookupRaw returns the raw typed value at the given path.
+// Supports array indexing like "tracks[0]" or "items[2]".
 func jsonPathLookupRaw(data any, path []string) (any, error) {
 	current := data
-	for i, key := range path {
-		switch v := current.(type) {
-		case map[string]any:
-			val, ok := v[key]
+	for i, segment := range path {
+		// Check if segment contains array index like "tracks[0]"
+		if match := arrayIndexPattern.FindStringSubmatch(segment); match != nil {
+			key := match[1]
+			idx, _ := strconv.Atoi(match[2]) // regex guarantees valid int
+
+			// First, access the map key
+			m, ok := current.(map[string]any)
 			if !ok {
-				return nil, fmt.Errorf("key '%s' not found at path '%s'", key, strings.Join(path[:i+1], "."))
+				return nil, fmt.Errorf("path segment '%s' is not an object", strings.Join(path[:i], "."))
+			}
+			val, ok := m[key]
+			if !ok {
+				return nil, fmt.Errorf("key '%s' not found at path '%s'", key, strings.Join(path[:i], ".")+"."+key)
+			}
+
+			// Then, access the array index
+			arr, ok := val.([]any)
+			if !ok {
+				return nil, fmt.Errorf("'%s' is not an array", key)
+			}
+			if idx < 0 || idx >= len(arr) {
+				return nil, fmt.Errorf("index %d out of bounds for array '%s' (length %d)", idx, key, len(arr))
+			}
+			current = arr[idx]
+		} else {
+			// Regular map key access
+			m, ok := current.(map[string]any)
+			if !ok {
+				return nil, fmt.Errorf("path segment '%s' is not an object", strings.Join(path[:i], "."))
+			}
+			val, ok := m[segment]
+			if !ok {
+				return nil, fmt.Errorf("key '%s' not found at path '%s'", segment, strings.Join(path[:i+1], "."))
 			}
 			current = val
-		default:
-			return nil, fmt.Errorf("path segment '%s' is not an object", strings.Join(path[:i], "."))
 		}
 	}
 	return current, nil

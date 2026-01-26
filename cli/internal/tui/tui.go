@@ -15,6 +15,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing/format/gitignore"
 	"github.com/mattn/go-isatty"
 )
 
@@ -49,7 +50,7 @@ func getTTY() (in, out *os.File, cleanup func()) {
 // yapiFilePattern matches *.yapi, *.yapi.yaml or *.yapi.yml in subdirectories only
 var yapiFilePattern = regexp.MustCompile(`^.+/.+\.yapi(\.ya?ml)?$`)
 
-// FindConfigFiles returns all git-tracked yapi config files relative to the current directory
+// FindConfigFiles returns all non-gitignored yapi config files relative to the current directory
 func FindConfigFiles() ([]string, error) {
 	return findFiles(false)
 }
@@ -60,61 +61,10 @@ func findFiles(includeProjectConfig bool) ([]string, error) {
 		return nil, fmt.Errorf("failed to get current working directory: %w", err)
 	}
 
-	// Open the git repository (searches up for .git)
-	repo, err := git.PlainOpenWithOptions(cwd, &git.PlainOpenOptions{
-		DetectDotGit: true,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("not in a git repository: %w", err)
-	}
-
-	// Get worktree to find repo root
-	wt, err := repo.Worktree()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get worktree: %w", err)
-	}
-	repoRoot := wt.Filesystem.Root()
-
-	// Read the git index (staged files = tracked files)
-	idx, err := repo.Storer.Index()
-	if err != nil {
-		return nil, fmt.Errorf("failed to read git index: %w", err)
-	}
-
-	// Calculate relative path from repo root to cwd
-	relCwd, err := filepath.Rel(repoRoot, cwd)
-	if err != nil {
-		return nil, fmt.Errorf("failed to calculate relative path: %w", err)
-	}
-	if relCwd == "." {
-		relCwd = ""
-	}
-
 	var configFiles []string
-	for _, entry := range idx.Entries {
-		path := entry.Name
-
-		// Skip if not under current directory
-		if relCwd != "" && !strings.HasPrefix(path, relCwd+"/") {
-			continue
-		}
-
-		// Get path relative to cwd
-		var relPath string
-		if relCwd != "" {
-			relPath = strings.TrimPrefix(path, relCwd+"/")
-		} else {
-			relPath = path
-		}
-
-		// Match .yapi.yml files
-		base := filepath.Base(relPath)
-		if yapiFilePattern.MatchString(relPath) {
-			configFiles = append(configFiles, relPath)
-		} else if includeProjectConfig && (base == "yapi.config.yml" || base == "yapi.config.yaml") {
-			// Only include yapi.config.yml if explicitly requested
-			configFiles = append(configFiles, relPath)
-		}
+	err = findFilesInRepo(cwd, cwd, includeProjectConfig, &configFiles)
+	if err != nil {
+		return nil, err
 	}
 
 	if len(configFiles) == 0 {
@@ -123,6 +73,87 @@ func findFiles(includeProjectConfig bool) ([]string, error) {
 
 	sort.Strings(configFiles)
 	return configFiles, nil
+}
+
+// findFilesInRepo walks a directory, respecting gitignore rules and handling submodules.
+func findFilesInRepo(dir, searchRoot string, includeProjectConfig bool, results *[]string) error {
+	// Open the git repository from this directory
+	repo, err := git.PlainOpenWithOptions(dir, &git.PlainOpenOptions{
+		DetectDotGit: true,
+	})
+	if err != nil {
+		return fmt.Errorf("not in a git repository: %w", err)
+	}
+
+	wt, err := repo.Worktree()
+	if err != nil {
+		return fmt.Errorf("failed to get worktree: %w", err)
+	}
+	repoRoot := wt.Filesystem.Root()
+
+	// Read gitignore patterns for this repo
+	patterns, err := gitignore.ReadPatterns(wt.Filesystem, nil)
+	if err != nil {
+		patterns = nil
+	}
+	matcher := gitignore.NewMatcher(patterns)
+
+	return filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+
+		// Get path relative to repo root for gitignore matching
+		relToRepo, err := filepath.Rel(repoRoot, path)
+		if err != nil {
+			return nil
+		}
+
+		pathComponents := strings.Split(filepath.ToSlash(relToRepo), "/")
+
+		if info.IsDir() {
+			if info.Name() == ".git" {
+				return filepath.SkipDir
+			}
+
+			// Check if this is a submodule (has its own .git)
+			if path != dir {
+				gitPath := filepath.Join(path, ".git")
+				if _, err := os.Stat(gitPath); err == nil {
+					// This is a submodule - recurse with new repo context
+					_ = findFilesInRepo(path, searchRoot, includeProjectConfig, results)
+					return filepath.SkipDir
+				}
+			}
+
+			// Check if directory is gitignored
+			if matcher.Match(pathComponents, true) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		// Check if file is gitignored
+		if matcher.Match(pathComponents, false) {
+			return nil
+		}
+
+		// Get path relative to search root for display
+		relPath, err := filepath.Rel(searchRoot, path)
+		if err != nil {
+			return nil
+		}
+
+		// Match .yapi.yml files
+		base := filepath.Base(relPath)
+		if yapiFilePattern.MatchString(relPath) {
+			*results = append(*results, relPath)
+		} else if includeProjectConfig && (base == "yapi.config.yml" || base == "yapi.config.yaml") {
+			*results = append(*results, relPath)
+		}
+
+		return nil
+	})
 }
 
 // FindConfigFileSingle prompts the user to select a single config file.

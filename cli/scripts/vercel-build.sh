@@ -38,6 +38,11 @@ DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 LDFLAGS="-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${DATE}"
 
 
+echo "Syncing topic docs into CLI embed dir..."
+mkdir -p cli/internal/docs/topics
+rm -rf cli/internal/docs/topics/*
+cp docs/topics/*.md cli/internal/docs/topics/
+
 echo "Building yapi CLI..."
 cd cli
 go build -ldflags "${LDFLAGS}" -o ./bin/yapi ./cmd/yapi

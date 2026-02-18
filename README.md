@@ -136,6 +136,39 @@ yapi lsp
 
 -----
 
+## ⚡ Quick Requests with `yapi send`
+
+Don't want to create a file? Use `yapi send` for one-off requests directly from the command line.
+
+```bash
+# Simple GET
+yapi send https://jsonplaceholder.typicode.com/posts/1
+
+# POST with JSON body (method auto-detected when body is provided)
+yapi send https://httpbin.org/post '{"title":"Hello from yapi"}'
+
+# Explicit method, custom headers
+yapi send -X PUT https://httpbin.org/put '{"updated":true}' \
+  -H 'Authorization: Bearer my-token'
+
+# Filter response with jq
+yapi send https://jsonplaceholder.typicode.com/posts/1 --jq '.title'
+
+# TCP request
+yapi send 'tcp://tcpbin.com:4242' 'Hello from yapi!'
+```
+
+**Flags:**
+- `-X, --method` - HTTP method (default: GET, or POST if body is provided)
+- `-H, --header` - Custom headers (repeatable, e.g. `-H 'Key: Value'`)
+- `-v, --verbose` - Show request details, timing, and response headers
+- `--json` - Output full result as JSON with metadata
+- `--jq` - Apply a JQ filter to the response
+
+Transport is auto-detected from the URL scheme: `tcp://` for TCP, `grpc://` for gRPC, and HTTP by default.
+
+-----
+
 ## 📚 Examples
 
 **yapi** speaks many protocols. Here is how you define them.
@@ -183,6 +216,7 @@ chain:
 **Key features:**
 - Reference previous step data with `${step_name.field}` syntax
 - Access nested JSON properties: `${login.data.token}`
+- Use chain variables in assertions: `.id == ${previous_step.expected_id}`
 - Assertions use JQ expressions that must evaluate to true
 - Chains stop on first failure (fail-fast)
 
@@ -251,6 +285,29 @@ expect:
     - . | length > 0       # array has items
     - .[0].email != null   # first item has email
     - .[] | .active == true # all items are active
+```
+
+**Chain variable assertions** - compare values across steps:
+
+```yaml
+yapi: v1
+chain:
+  - name: create_item
+    url: https://api.example.com/items
+    method: POST
+    body:
+      name: "Test Item"
+    expect:
+      status: 201
+
+  - name: get_item
+    url: https://api.example.com/items/${create_item.id}
+    method: GET
+    expect:
+      status: 200
+      assert:
+        - .id == ${create_item.id}           # verify same ID
+        - .name == "Test Item"
 ```
 
 ### 5\. JQ Filtering (Built-in\!)

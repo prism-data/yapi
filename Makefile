@@ -1,4 +1,4 @@
-.PHONY: build run run-print-analytics test fuzz fmt fmt-check clean install docker web web-run bump-patch bump-minor bump-major release build-all lint lint-install install-lint lint-quick lint-full gen-docs gh-action fuzz-cover local-release
+.PHONY: build run run-print-analytics test fuzz fmt fmt-check clean install docker web web-run bump-patch bump-minor bump-major release build-all lint lint-install install-lint lint-quick lint-full gen-docs gh-action fuzz-cover local-release sync-docs
 
 NAME := yapi
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -9,6 +9,7 @@ LDFLAGS := -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.date=$(DA
 
 install: build
 	@echo "Installing yapi to $$(go env GOPATH)/bin..."
+	@mkdir -p $$(go env GOPATH)/bin
 	@cp ./cli/bin/yapi $$(go env GOPATH)/bin/yapi
 	@codesign --sign - --force $$(go env GOPATH)/bin/yapi 2>/dev/null || true
 	@echo "Done! Ensure $$(go env GOPATH)/bin is in your PATH."
@@ -44,7 +45,12 @@ lint-full: lint
 	@echo "Running govulncheck..."
 	@cd cli && govulncheck ./...
 
-build:
+sync-docs:
+	@mkdir -p cli/internal/docs/topics
+	@rm -rf cli/internal/docs/topics/*
+	@cp docs/topics/*.md cli/internal/docs/topics/
+
+build: sync-docs
 	@echo "Building yapi CLI..."
 	@cd cli && go build -ldflags "$(LDFLAGS)" -o ./bin/yapi ./cmd/yapi
 	@codesign --sign - --force ./cli/bin/yapi 2>/dev/null || true

@@ -95,6 +95,8 @@ func main() {
 		Stress:         app.stressE,
 		About:          aboutE,
 		Import:         importE,
+		Send:           app.sendE,
+		Docs:           docsE,
 	}
 
 	rootCmd := commands.BuildRoot(cfg, handlers)
@@ -110,7 +112,7 @@ func main() {
 	rootCmd.PersistentPostRun = func(cmd *cobra.Command, args []string) {
 		// Log command to history (skip meta commands)
 		switch cmd.Name() {
-		case "history", "version", "lsp", "help", "yapi", "about":
+		case "history", "version", "lsp", "help", "yapi", "about", "docs":
 			return
 		}
 		logHistoryCmd(reconstructCommand(cmd, args))

@@ -29,6 +29,8 @@ type Handlers struct {
 	Stress         func(cmd *cobra.Command, args []string) error
 	About          func(cmd *cobra.Command, args []string) error
 	Import         func(cmd *cobra.Command, args []string) error
+	Send           func(cmd *cobra.Command, args []string) error
+	Docs           func(cmd *cobra.Command, args []string) error
 }
 
 // BuildRoot builds the root command tree with optional handlers.
@@ -41,6 +43,7 @@ func BuildRoot(cfg *Config, handlers *Handlers) *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:           "yapi",
 		Short:         "yapi is a unified API client for HTTP, gRPC, and TCP",
+		Long:          "yapi is a unified API client for HTTP, gRPC, GraphQL, and TCP.\n\nRun 'yapi docs' to browse topic-based documentation.",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		Run:           func(cmd *cobra.Command, args []string) {},
@@ -69,6 +72,7 @@ var cmdManifest = []CommandSpec{
 	{
 		Use:   "run [file]",
 		Short: "Run a request defined in a yapi config file (reads from stdin if no file specified)",
+		Long:  "Run a request defined in a yapi config file (reads from stdin if no file specified).\n\nRelated: yapi docs assert, yapi docs chain, yapi docs variables",
 		Args:  cobra.MaximumNArgs(1),
 		Flags: []FlagSpec{
 			{Name: "env", Shorthand: "e", Type: "string", Default: "", Usage: "Target environment from yapi.config.yml"},
@@ -124,6 +128,7 @@ var cmdManifest = []CommandSpec{
 	{
 		Use:   "test [directory]",
 		Short: "Run all *.test.yapi, *.test.yapi.yml, *.test.yapi.yaml files in the current directory or specified directory",
+		Long:  "Run all *.test.yapi, *.test.yapi.yml, *.test.yapi.yaml files in the current directory or specified directory.\n\nRelated: yapi docs testing, yapi docs assert",
 		Args:  cobra.MaximumNArgs(1),
 		Flags: []FlagSpec{
 			{Name: "all", Shorthand: "a", Type: "bool", Default: false, Usage: "Run all *.yapi, *.yapi.yml, *.yapi.yaml files (not just test files)"},
@@ -163,6 +168,25 @@ var cmdManifest = []CommandSpec{
 		Aliases: []string{"ai", "brief"},
 		Short:   "Show comprehensive yapi developer guide",
 		Long:    "Display a comprehensive developer guide for working with yapi. Includes syntax, examples, best practices, and project organization patterns.",
+	},
+	{
+		Use:   "send <url> [body]",
+		Short: "Send a quick request without a config file",
+		Long:  "Send a one-off HTTP or TCP request directly from the command line.\nThe transport is auto-detected from the URL scheme (tcp://, grpc://, or HTTP by default).\n\nExamples:\n  yapi send https://httpbin.org/get\n  yapi send -X POST https://httpbin.org/post '{\"hello\":\"world\"}'\n  yapi send tcp://localhost:9877 '{\"type\":\"health\",\"params\":{}}'\n\nRelated: yapi docs send, yapi docs protocols",
+		Args:  cobra.RangeArgs(1, 2),
+		Flags: []FlagSpec{
+			{Name: "method", Shorthand: "X", Type: "string", Default: "", Usage: "HTTP method (default: GET, or POST if body is provided)"},
+			{Name: "header", Shorthand: "H", Type: "stringSlice", Default: nil, Usage: "Custom headers (e.g. -H 'Content-Type: application/json')"},
+			{Name: "verbose", Shorthand: "v", Type: "bool", Default: false, Usage: "Show verbose output (request details, timing, headers)"},
+			{Name: "json", Type: "bool", Default: false, Usage: "Output result as JSON with full metadata"},
+			{Name: "jq", Type: "string", Default: "", Usage: "JQ filter to apply to the response"},
+		},
+	},
+	{
+		Use:   "docs [topic]",
+		Short: "Browse topic-based documentation",
+		Long:  "Browse topic-based documentation for yapi features.\nRun 'yapi docs' to see all topics, or 'yapi docs <topic>' to read one.",
+		Args:  cobra.MaximumNArgs(1),
 	},
 	{
 		Use:   "import [file]",
@@ -215,6 +239,10 @@ func getHandler(h *Handlers, use string) func(*cobra.Command, []string) error {
 		return h.Stress
 	case "about":
 		return h.About
+	case "send":
+		return h.Send
+	case "docs":
+		return h.Docs
 	case "import":
 		return h.Import
 	default:

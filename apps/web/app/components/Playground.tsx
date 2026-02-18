@@ -12,7 +12,7 @@ const EXAMPLES = {
   http: {
     label: "HTTP",
     yaml: `yapi: v1
-# POST request with JSON body
+# POST request with JSON body and assertions
 url: https://httpbin.org/post
 method: POST
 content_type: application/json
@@ -26,6 +26,13 @@ body:
   metadata:
     source: yapi
     version: "1.0"
+
+expect:
+  status: 200
+  assert:
+    - .json.title == "Hello from yapi"
+    - .json.tags | length == 2
+    - .json.metadata.source == "yapi"
 `,
   },
   graphql: {
@@ -93,7 +100,7 @@ chain:
     rpc: SayHello
     plaintext: true
     body:
-      greeting: $get_todo.title
+      greeting: \${get_todo.title}
 
   - name: create_post
     url: https://jsonplaceholder.typicode.com/posts
@@ -101,9 +108,9 @@ chain:
     headers:
       Content-Type: application/json
     body:
-      original_todo: $get_todo.title
-      grpc_reply: $grpc_hello.reply
-      userId: $get_todo.userId
+      original_todo: \${get_todo.title}
+      grpc_reply: \${grpc_hello.reply}
+      userId: \${get_todo.userId}
 `,
   },
 } as const;

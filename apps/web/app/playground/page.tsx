@@ -7,20 +7,20 @@ import { SITE_URL } from "@/app/lib/constants";
 export const metadata: Metadata = {
   title: "Playground",
   description:
-    "Interactive YAML API playground. Write and test HTTP, gRPC, and TCP requests directly in your browser with real-time validation.",
+    "Interactive YAML API playground. Write and test HTTP, GraphQL, gRPC, and TCP requests directly in your browser with real-time validation.",
   alternates: {
     canonical: `${SITE_URL}/playground`,
   },
   openGraph: {
     title: "yapi Playground",
     description:
-      "Interactive YAML API playground. Write and test HTTP, gRPC, and TCP requests directly in your browser.",
+      "Interactive YAML API playground. Write and test HTTP, GraphQL, gRPC, and TCP requests directly in your browser.",
     url: `${SITE_URL}/playground`,
   },
   twitter: {
     title: "yapi Playground",
     description:
-      "Interactive YAML API playground. Write and test HTTP, gRPC, and TCP requests directly in your browser.",
+      "Interactive YAML API playground. Write and test HTTP, GraphQL, gRPC, and TCP requests directly in your browser.",
   },
 };
 

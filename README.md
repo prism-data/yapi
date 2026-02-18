@@ -59,6 +59,61 @@ make install
 
 -----
 
+## 🧠 Editor Integration (LSP)
+
+Unlike other API clients, **yapi** ships with a **full LSP implementation** out of the box. Your editor becomes an intelligent API development environment with real-time validation, autocompletion, and inline execution.
+
+### VS Code & Cursor
+
+Install the official extension from [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=yapi.yapi-extension) or [Open VSX](https://open-vsx.org/extension/yapi/yapi-extension):
+
+**Features:**
+- **Run with `Cmd+Enter`** (Mac) or `Ctrl+Enter` (Windows/Linux) - execute requests without leaving your editor
+- **Inline results panel** - see responses, headers, and timing right in VS Code
+- **Real-time validation** - errors and warnings as you type
+- **Intelligent autocompletion** - context-aware suggestions for keys, methods, and variables
+- **Hover info** - hover over `${VAR}` to see environment variable status
+
+The extension automatically detects `.yapi.yml` files and activates the language server. No configuration needed.
+
+### Neovim (Native Plugin)
+
+**yapi** was built with Neovim in mind. First-class support via `lua/yapi_nvim`:
+
+```lua
+-- lazy.nvim
+{
+  dir = "~/path/to/yapi/lua/yapi_nvim",
+  config = function()
+    require("yapi_nvim").setup({
+      lsp = true,    -- Enables the yapi Language Server
+      pretty = true, -- Uses the TUI renderer in the popup
+    })
+  end
+}
+```
+
+Commands:
+- `:YapiRun` - Execute the current buffer
+- `:YapiWatch` - Open a split with live reload
+
+### Other Editors
+
+The LSP communicates over stdio and works with any editor that supports the Language Server Protocol:
+
+```bash
+yapi lsp
+```
+
+| Feature | Description |
+|---------|-------------|
+| **Real-time Validation** | Errors and warnings as you type, with precise line/column positions |
+| **Intelligent Autocompletion** | Context-aware suggestions for keys, HTTP methods, content types |
+| **Hover Info** | Hover over `${VAR}` to see environment variable status |
+| **Go to Definition** | Jump to referenced chain steps and variables |
+
+-----
+
 ## 🚀 Quick Start
 
 1.  **Create a request file** (e.g., `get-user.yapi.yml`):
@@ -161,6 +216,7 @@ chain:
 **Key features:**
 - Reference previous step data with `${step_name.field}` syntax
 - Access nested JSON properties: `${login.data.token}`
+- Use chain variables in assertions: `.id == ${previous_step.expected_id}`
 - Assertions use JQ expressions that must evaluate to true
 - Chains stop on first failure (fail-fast)
 
@@ -229,6 +285,29 @@ expect:
     - . | length > 0       # array has items
     - .[0].email != null   # first item has email
     - .[] | .active == true # all items are active
+```
+
+**Chain variable assertions** - compare values across steps:
+
+```yaml
+yapi: v1
+chain:
+  - name: create_item
+    url: https://api.example.com/items
+    method: POST
+    body:
+      name: "Test Item"
+    expect:
+      status: 201
+
+  - name: get_item
+    url: https://api.example.com/items/${create_item.id}
+    method: GET
+    expect:
+      status: 200
+      assert:
+        - .id == ${create_item.id}           # verify same ID
+        - .name == "Test Item"
 ```
 
 ### 5\. JQ Filtering (Built-in\!)
@@ -489,61 +568,6 @@ yapi test ./tests --no-start         # Skip server startup (already running)
 yapi test ./tests --start "npm start" --wait-on "http://localhost:4000/health"
 yapi test ./tests --verbose          # See server output
 ```
-
------
-
-## 🧠 Editor Integration (LSP)
-
-Unlike other API clients, **yapi** ships with a **full LSP implementation** out of the box. Your editor becomes an intelligent API development environment with real-time validation, autocompletion, and inline execution.
-
-### VS Code & Cursor
-
-Install the official extension from [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=yapi.yapi-extension) or [Open VSX](https://open-vsx.org/extension/yapi/yapi-extension):
-
-**Features:**
-- **Run with `Cmd+Enter`** (Mac) or `Ctrl+Enter` (Windows/Linux) - execute requests without leaving your editor
-- **Inline results panel** - see responses, headers, and timing right in VS Code
-- **Real-time validation** - errors and warnings as you type
-- **Intelligent autocompletion** - context-aware suggestions for keys, methods, and variables
-- **Hover info** - hover over `${VAR}` to see environment variable status
-
-The extension automatically detects `.yapi.yml` files and activates the language server. No configuration needed.
-
-### Neovim (Native Plugin)
-
-**yapi** was built with Neovim in mind. First-class support via `lua/yapi_nvim`:
-
-```lua
--- lazy.nvim
-{
-  dir = "~/path/to/yapi/lua/yapi_nvim",
-  config = function()
-    require("yapi_nvim").setup({
-      lsp = true,    -- Enables the yapi Language Server
-      pretty = true, -- Uses the TUI renderer in the popup
-    })
-  end
-}
-```
-
-Commands:
-- `:YapiRun` - Execute the current buffer
-- `:YapiWatch` - Open a split with live reload
-
-### Other Editors
-
-The LSP communicates over stdio and works with any editor that supports the Language Server Protocol:
-
-```bash
-yapi lsp
-```
-
-| Feature | Description |
-|---------|-------------|
-| **Real-time Validation** | Errors and warnings as you type, with precise line/column positions |
-| **Intelligent Autocompletion** | Context-aware suggestions for keys, HTTP methods, content types |
-| **Hover Info** | Hover over `${VAR}` to see environment variable status |
-| **Go to Definition** | Jump to referenced chain steps and variables |
 
 -----
 

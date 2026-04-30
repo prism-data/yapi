@@ -100,6 +100,7 @@ func parseV1WithOptions(data []byte, configPath string, resolver vars.Resolver, 
 	if err := yaml.Unmarshal(data, &v1); err != nil {
 		return nil, err
 	}
+	v1.configPath = configPath
 
 	// Merge with environment defaults if provided
 	if defaults != nil {

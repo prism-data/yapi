@@ -171,6 +171,64 @@ headers:
 	}
 }
 
+func TestLoadFromStringWithPath_BodyFile(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	if err := os.MkdirAll(tmpDir+"/fixtures", 0750); err != nil {
+		t.Fatal(err)
+	}
+	payload := `{"name":"from-file","enabled":true}`
+	if err := os.WriteFile(tmpDir+"/fixtures/payload.json", []byte(payload), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	yapiContent := `yapi: v1
+url: https://example.com/create
+method: POST
+content_type: application/json
+body_file: fixtures/payload.json`
+	yapiPath := tmpDir + "/request.yapi.yml"
+
+	result, err := LoadFromStringWithPath(yapiContent, yapiPath, nil, nil)
+	if err != nil {
+		t.Fatalf("LoadFromStringWithPath() failed: %v", err)
+	}
+	if result == nil || result.Request == nil {
+		t.Fatal("LoadFromStringWithPath() returned nil result or request")
+	}
+
+	bodyBytes, err := io.ReadAll(result.Request.Body)
+	if err != nil {
+		t.Fatalf("failed to read request body: %v", err)
+	}
+	if string(bodyBytes) != payload {
+		t.Errorf("body = %q, want %q", string(bodyBytes), payload)
+	}
+	if result.Request.Headers["Content-Type"] != "application/json" {
+		t.Errorf("Content-Type = %q, want application/json", result.Request.Headers["Content-Type"])
+	}
+	if result.Request.Metadata["body_source"] != "body_file" {
+		t.Errorf("body_source = %q, want body_file", result.Request.Metadata["body_source"])
+	}
+}
+
+func TestLoadFromStringWithPath_BodyFileMutuallyExclusive(t *testing.T) {
+	tmpDir := t.TempDir()
+	yapiContent := `yapi: v1
+url: https://example.com/create
+method: POST
+body_file: payload.json
+json: '{"name":"inline"}'`
+
+	_, err := LoadFromStringWithPath(yapiContent, tmpDir+"/request.yapi.yml", nil, nil)
+	if err == nil {
+		t.Fatal("LoadFromStringWithPath() should have failed")
+	}
+	if !strings.Contains(err.Error(), "mutually exclusive") {
+		t.Fatalf("error = %v, want mutually exclusive error", err)
+	}
+}
+
 func TestLoadFromStringWithPath_EnvFiles_MultipleFiles(t *testing.T) {
 	// Create a temporary directory for our test files
 	tmpDir, err := os.MkdirTemp("", "yapi-envfiles-multi-test-*")

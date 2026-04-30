@@ -84,10 +84,13 @@ func ValidateRequest(req *domain.Request) []Issue {
 	hasBody := req.Body != nil
 	if req.Metadata["graphql_query"] != "" && hasBody {
 		field := "body"
-		if req.Metadata["body_source"] == "json" {
+		switch req.Metadata["body_source"] {
+		case "json":
 			field = "json"
+		case "body_file":
+			field = "body_file"
 		}
-		add(SeverityError, field, "`graphql` cannot be used with `body` or `json`")
+		add(SeverityError, field, "`graphql` cannot be used with `body`, `body_file`, or `json`")
 	}
 
 	return issues

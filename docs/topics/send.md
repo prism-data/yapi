@@ -13,8 +13,19 @@ yapi send https://httpbin.org/post '{"hello":"world"}'
 ## Method Detection
 
 - **No body**: defaults to GET
-- **Body provided**: defaults to POST
+- **Body or `--body-file` provided**: defaults to POST
 - **Override with -X**: `yapi send -X PUT https://api.example.com/users/1 '{"name":"Bob"}'`
+
+## Body Files
+
+Read the request body from a file with `--body-file`:
+
+```bash
+yapi send https://httpbin.org/post --body-file ./payload.json \
+  -H "Content-Type: application/json"
+```
+
+`--body-file` is mutually exclusive with the positional body argument.
 
 ## Headers
 
@@ -66,6 +77,10 @@ yapi send https://jsonplaceholder.typicode.com/posts/1
 
 # POST with JSON body
 yapi send https://httpbin.org/post '{"key":"value"}'
+
+# POST with body from file
+yapi send https://httpbin.org/post --body-file ./payload.json \
+  -H "Content-Type: application/json"
 
 # PUT with headers
 yapi send -X PUT https://api.example.com/items/1 '{"name":"updated"}' \

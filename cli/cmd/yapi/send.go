@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -26,6 +28,10 @@ func (app *rootCommand) sendE(cmd *cobra.Command, args []string) error {
 	verbose, _ := cmd.Flags().GetBool("verbose")
 	jsonOutput, _ := cmd.Flags().GetBool("json")
 	jqFilter, _ := cmd.Flags().GetString("jq")
+	bodyFile, _ := cmd.Flags().GetString("body-file")
+	if body != "" && bodyFile != "" {
+		return fmt.Errorf("positional body and --body-file are mutually exclusive")
+	}
 
 	log := NewLogger(verbose)
 
@@ -33,9 +39,10 @@ func (app *rootCommand) sendE(cmd *cobra.Command, args []string) error {
 	transport := domain.DetectTransport(url, false)
 
 	// Default method: POST if body provided, GET otherwise (HTTP only)
+	bodyProvided := body != "" || bodyFile != ""
 	if method == "" {
 		if transport == constants.TransportHTTP {
-			if body != "" {
+			if bodyProvided {
 				method = constants.MethodPOST
 			} else {
 				method = constants.MethodGET
@@ -63,6 +70,7 @@ func (app *rootCommand) sendE(cmd *cobra.Command, args []string) error {
 	}
 
 	// Set body
+	bodyLog := body
 	if body != "" {
 		req.Body = strings.NewReader(body)
 
@@ -77,6 +85,15 @@ func (app *rootCommand) sendE(cmd *cobra.Command, args []string) error {
 			}
 		}
 	}
+	if bodyFile != "" {
+		bodyBytes, err := os.ReadFile(bodyFile) // #nosec G304 -- body-file is an explicit user-provided request payload path
+		if err != nil {
+			return fmt.Errorf("failed to read body-file %q: %w", bodyFile, err)
+		}
+		req.Body = bytes.NewReader(bodyBytes)
+		req.Metadata["body_source"] = "body_file"
+		bodyLog = fmt.Sprintf("<body_file: %s (%d bytes)>", bodyFile, len(bodyBytes))
+	}
 
 	// Set transport metadata
 	req.Metadata["transport"] = transport
@@ -86,7 +103,9 @@ func (app *rootCommand) sendE(cmd *cobra.Command, args []string) error {
 
 	// TCP-specific metadata defaults
 	if transport == constants.TransportTCP {
-		req.Metadata["data"] = body
+		if bodyFile == "" {
+			req.Metadata["data"] = body
+		}
 		req.Metadata["encoding"] = "text"
 		req.Metadata["read_timeout"] = "5"
 		req.Metadata["idle_timeout"] = "500"
@@ -98,7 +117,7 @@ func (app *rootCommand) sendE(cmd *cobra.Command, args []string) error {
 	}
 
 	log.Verbose("Transport: %s", transport)
-	log.Request(method, url, req.Headers, body)
+	log.Request(method, url, req.Headers, bodyLog)
 
 	// Get executor
 	exec, err := executor.GetTransport(transport, app.httpClient)

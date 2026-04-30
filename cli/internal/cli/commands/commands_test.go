@@ -98,6 +98,24 @@ func TestBuildRoot(t *testing.T) {
 	}
 }
 
+func TestSendCommandHasBodyFileFlag(t *testing.T) {
+	var sendSpec *CommandSpec
+	for i, spec := range cmdManifest {
+		if spec.Use == "send <url> [body]" {
+			sendSpec = &cmdManifest[i]
+			break
+		}
+	}
+	if sendSpec == nil {
+		t.Fatal("send command not found in manifest")
+	}
+
+	cmd := BuildCommand(*sendSpec)
+	if cmd.Flags().Lookup("body-file") == nil {
+		t.Fatal("send command missing body-file flag")
+	}
+}
+
 // Helper function to find a command by name
 func findCommandByName(root *cobra.Command, name string) *cobra.Command {
 	for _, cmd := range root.Commands() {

@@ -467,6 +467,9 @@ func logResolvedConfig(stepNum int, stepName string, cfg *config.ConfigV1) {
 	if cfg.JSON != "" {
 		fmt.Fprintf(os.Stderr, "[VERBOSE]   JSON: %s\n", truncateStr(cfg.JSON))
 	}
+	if cfg.BodyFile != "" {
+		fmt.Fprintf(os.Stderr, "[VERBOSE]   BodyFile: %s\n", cfg.BodyFile)
+	}
 	if cfg.Data != "" {
 		fmt.Fprintf(os.Stderr, "[VERBOSE]   Data: %s\n", truncateStr(cfg.Data))
 	}
@@ -496,6 +499,7 @@ func warnBareChainRefsInConfig(stepName string, cfg *config.ConfigV1) {
 	check("url", cfg.URL)
 	check("path", cfg.Path)
 	check("json", cfg.JSON)
+	check("body_file", cfg.BodyFile)
 	check("data", cfg.Data)
 	for k, v := range cfg.Headers {
 		check(fmt.Sprintf("header '%s'", k), v)
@@ -592,6 +596,15 @@ func interpolateConfig(chainCtx *ChainContext, cfg *config.ConfigV1) (*config.Co
 			return nil, fmt.Errorf("json: %w", err)
 		}
 		result.JSON = expanded
+	}
+
+	// Interpolate BodyFile
+	if result.BodyFile != "" {
+		expanded, err := chainCtx.ExpandVariables(result.BodyFile)
+		if err != nil {
+			return nil, fmt.Errorf("body_file: %w", err)
+		}
+		result.BodyFile = expanded
 	}
 
 	// Interpolate Data (TCP)

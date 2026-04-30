@@ -147,6 +147,10 @@ yapi send https://jsonplaceholder.typicode.com/posts/1
 # POST with JSON body (method auto-detected when body is provided)
 yapi send https://httpbin.org/post '{"title":"Hello from yapi"}'
 
+# POST with body from file
+yapi send https://httpbin.org/post --body-file ./payload.json \
+  -H 'Content-Type: application/json'
+
 # Explicit method, custom headers
 yapi send -X PUT https://httpbin.org/put '{"updated":true}' \
   -H 'Authorization: Bearer my-token'
@@ -161,6 +165,7 @@ yapi send 'tcp://tcpbin.com:4242' 'Hello from yapi!'
 **Flags:**
 - `-X, --method` - HTTP method (default: GET, or POST if body is provided)
 - `-H, --header` - Custom headers (repeatable, e.g. `-H 'Key: Value'`)
+- `--body-file` - Read request body from a file
 - `-v, --verbose` - Show request details, timing, and response headers
 - `--json` - Output full result as JSON with metadata
 - `--jq` - Apply a JQ filter to the response
@@ -269,6 +274,16 @@ body:
   tags:
     - cli
     - testing
+```
+
+For larger or generated payloads, keep the body in a separate file:
+
+```yaml
+yapi: v1
+url: https://api.example.com/posts
+method: POST
+content_type: application/json
+body_file: ./fixtures/create-post.json
 ```
 
 ### 4\. Advanced Assertions

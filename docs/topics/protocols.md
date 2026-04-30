@@ -21,6 +21,16 @@ expect:
   status: 201
 ```
 
+Use `body_file` when the payload should live outside YAML:
+
+```yaml
+yapi: v1
+url: https://api.example.com/users
+method: POST
+content_type: application/json
+body_file: ./fixtures/create-user.json
+```
+
 ### Form Data
 
 ```yaml
@@ -67,6 +77,16 @@ rpc: SayHello
 
 body:
   name: "World"
+```
+
+For larger gRPC JSON request messages, use a body file:
+
+```yaml
+yapi: v1
+url: grpc://localhost:50051
+service: helloworld.Greeter
+rpc: SayHello
+body_file: ./fixtures/say-hello.json
 ```
 
 ### With Proto Files

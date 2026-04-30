@@ -7,6 +7,8 @@ import (
 	"io"
 	"mime/multipart"
 	"net/url"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -26,6 +28,7 @@ var knownV1Keys = map[string]bool{
 	"content_type":     true,
 	"headers":          true,
 	"body":             true,
+	"body_file":        true,
 	"json":             true,
 	"form":             true,
 	"query":            true,
@@ -74,8 +77,9 @@ type ConfigV1 struct {
 	ContentType    string            `yaml:"content_type,omitempty"`
 	Headers        map[string]string `yaml:"headers,omitempty"`
 	Body           map[string]any    `yaml:"body,omitempty"`
-	JSON           string            `yaml:"json,omitempty"` // Raw JSON override
-	Form           map[string]string `yaml:"form,omitempty"` // Form data (application/x-www-form-urlencoded or multipart/form-data)
+	BodyFile       string            `yaml:"body_file,omitempty"` // Path to raw request body file
+	JSON           string            `yaml:"json,omitempty"`      // Raw JSON override
+	Form           map[string]string `yaml:"form,omitempty"`      // Form data (application/x-www-form-urlencoded or multipart/form-data)
 	Query          map[string]string `yaml:"query,omitempty"`
 	Graphql        string            `yaml:"graphql,omitempty"`   // GraphQL query/mutation
 	Variables      map[string]any    `yaml:"variables,omitempty"` // GraphQL variables
@@ -110,6 +114,8 @@ type ConfigV1 struct {
 
 	// Chain allows executing multiple dependent requests
 	Chain []ChainStep `yaml:"chain,omitempty"`
+
+	configPath string `yaml:"-"` // Path to this config file for resolving relative files
 }
 
 // WaitFor defines polling behavior for a request
@@ -146,6 +152,7 @@ func (c *ConfigV1) Merge(step ChainStep) ConfigV1 {
 	m.Path = utils.Coalesce(step.Path, c.Path)
 	m.Method = utils.Coalesce(step.Method, c.Method)
 	m.ContentType = utils.Coalesce(step.ContentType, c.ContentType)
+	m.BodyFile = utils.Coalesce(step.BodyFile, c.BodyFile)
 	m.JSON = utils.Coalesce(step.JSON, c.JSON)
 	m.Graphql = utils.Coalesce(step.Graphql, c.Graphql)
 	m.Service = utils.Coalesce(step.Service, c.Service)
@@ -204,6 +211,7 @@ func (c *ConfigV1) MergeWithDefaults(defaults ConfigV1) ConfigV1 {
 	m.Path = utils.Coalesce(c.Path, defaults.Path)
 	m.Method = utils.Coalesce(c.Method, defaults.Method)
 	m.ContentType = utils.Coalesce(c.ContentType, defaults.ContentType)
+	m.BodyFile = utils.Coalesce(c.BodyFile, defaults.BodyFile)
 	m.JSON = utils.Coalesce(c.JSON, defaults.JSON)
 	m.Graphql = utils.Coalesce(c.Graphql, defaults.Graphql)
 	m.Service = utils.Coalesce(c.Service, defaults.Service)
@@ -256,6 +264,7 @@ func (c *ConfigV1) MergeWithDefaults(defaults ConfigV1) ConfigV1 {
 	if len(c.EnvFiles) > 0 {
 		m.EnvFiles = c.EnvFiles
 	}
+	m.configPath = c.configPath
 
 	return m
 }
@@ -366,6 +375,9 @@ func (c *ConfigV1) prepareBody() (io.Reader, string, error) {
 	if c.JSON != "" {
 		bodyFieldCount++
 	}
+	if c.BodyFile != "" {
+		bodyFieldCount++
+	}
 	if len(c.Body) > 0 {
 		bodyFieldCount++
 	}
@@ -373,7 +385,7 @@ func (c *ConfigV1) prepareBody() (io.Reader, string, error) {
 		bodyFieldCount++
 	}
 	if bodyFieldCount > 1 {
-		return nil, "", fmt.Errorf("`body`, `json`, and `form` are mutually exclusive")
+		return nil, "", fmt.Errorf("`body`, `body_file`, `json`, and `form` are mutually exclusive")
 	}
 
 	// Handle JSON string
@@ -382,6 +394,16 @@ func (c *ConfigV1) prepareBody() (io.Reader, string, error) {
 			c.ContentType = "application/json"
 		}
 		return strings.NewReader(c.JSON), "json", nil
+	}
+
+	// Handle raw body file
+	if c.BodyFile != "" {
+		bodyPath := c.resolveConfigRelativePath(c.BodyFile)
+		bodyBytes, err := os.ReadFile(bodyPath) // #nosec G304 -- body_file is an explicit user-provided request payload path
+		if err != nil {
+			return nil, "", fmt.Errorf("failed to read body_file %q: %w", c.BodyFile, err)
+		}
+		return bytes.NewReader(bodyBytes), "body_file", nil
 	}
 
 	// Handle JSON object
@@ -432,6 +454,13 @@ func (c *ConfigV1) prepareBody() (io.Reader, string, error) {
 	}
 
 	return nil, "", nil
+}
+
+func (c *ConfigV1) resolveConfigRelativePath(path string) string {
+	if path == "" || filepath.IsAbs(path) || c.configPath == "" {
+		return path
+	}
+	return filepath.Join(filepath.Dir(c.configPath), path)
 }
 
 // buildURL constructs the final URL with path and query parameters

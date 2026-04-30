@@ -347,6 +347,9 @@ yapi: v1
 url: grpc://localhost:50051
 service: helloworld.Greeter
 rpc: SayHello
+headers:
+  authorization: Bearer ${TOKEN}
+  x-tenant-id: ${TENANT_ID}
 
 body:
   name: "yapi User"

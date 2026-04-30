@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -84,7 +85,7 @@ func GRPCTransport(ctx context.Context, req *domain.Request) (*domain.Response, 
 	handler := grpcurl.NewDefaultEventHandler(respBuf, descSource, formatter, false)
 
 	// Invoke RPC
-	if err := grpcurl.InvokeRPC(ctx, descSource, cc, service+"/"+rpc, nil, handler, reqSupplier); err != nil {
+	if err := grpcurl.InvokeRPC(ctx, descSource, cc, service+"/"+rpc, grpcMetadataHeaders(req.Headers), handler, reqSupplier); err != nil {
 		return nil, fmt.Errorf("failed to invoke gRPC RPC %s/%s: %w", service, rpc, err)
 	}
 
@@ -93,4 +94,22 @@ func GRPCTransport(ctx context.Context, req *domain.Request) (*domain.Response, 
 		Headers:    map[string]string{"Content-Type": "application/json"},
 		Body:       io.NopCloser(respBuf),
 	}, nil
+}
+
+func grpcMetadataHeaders(headers map[string]string) []string {
+	if len(headers) == 0 {
+		return nil
+	}
+
+	keys := make([]string, 0, len(headers))
+	for key := range headers {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	metadata := make([]string, 0, len(keys))
+	for _, key := range keys {
+		metadata = append(metadata, fmt.Sprintf("%s: %s", key, headers[key]))
+	}
+	return metadata
 }

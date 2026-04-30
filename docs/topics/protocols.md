@@ -89,6 +89,24 @@ rpc: SayHello
 body_file: ./fixtures/say-hello.json
 ```
 
+### Metadata
+
+Use `headers` to send gRPC request metadata:
+
+```yaml
+yapi: v1
+url: grpc://localhost:50051
+service: helloworld.Greeter
+rpc: SayHello
+headers:
+  authorization: Bearer ${TOKEN}
+  x-tenant-id: ${TENANT_ID}
+body:
+  name: "World"
+```
+
+Metadata keys should generally be lowercase. Binary metadata keys ending in `-bin` should use base64-encoded values.
+
 ### With Proto Files
 
 ```yaml

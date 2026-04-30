@@ -434,7 +434,7 @@ var topLevelKeys = []struct {
 	{"url", "The target URL (required)"},
 	{"path", "URL path to append"},
 	{"method", "HTTP method or protocol (GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS, grpc, tcp)"},
-	{"headers", "HTTP headers as key-value pairs"},
+	{"headers", "HTTP headers or gRPC metadata as key-value pairs"},
 	{"content_type", "Content-Type header value"},
 	{"body", "Request body as key-value pairs"},
 	{"body_file", "Path to a raw request body file"},

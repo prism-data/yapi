@@ -53,7 +53,7 @@ Because the request file uses `path: /` instead of a full `url`, yapi resolves i
 | `url` | string | Full request URL |
 | `path` | string | Path appended to environment base URL |
 | `method` | string | HTTP method: GET, POST, PUT, PATCH, DELETE |
-| `headers` | map | Request headers |
+| `headers` | map | HTTP request headers or gRPC metadata |
 | `query` | map | Query parameters |
 | `timeout` | string | Request timeout (e.g., `"4s"`, `"100ms"`) |
 | `delay` | string | Wait before executing (e.g., `"5s"`) |
@@ -106,6 +106,8 @@ body_file: ./fixtures/import.json
 | `proto` | string | Path to .proto file |
 | `proto_path` | string | Proto import path |
 | `plaintext` | bool | No TLS for gRPC |
+
+For gRPC requests, values in `headers` are sent as request metadata. Use lowercase keys for custom metadata, and base64-encoded values for binary metadata keys ending in `-bin`.
 
 ## TCP Fields
 

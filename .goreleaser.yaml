@@ -56,3 +56,4 @@ homebrew_casks:
       owner: prism-data
       name: homebrew-prism
       branch: main
+      token: "{{ .Env.HOMEBREW_GITHUB_PAT }}"

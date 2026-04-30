@@ -13,6 +13,7 @@ import (
 	"yapi.run/cli/internal/executor"
 	"yapi.run/cli/internal/output"
 	"yapi.run/cli/internal/runner"
+	"yapi.run/cli/internal/vars"
 )
 
 func (app *rootCommand) sendE(cmd *cobra.Command, args []string) error {
@@ -90,6 +91,12 @@ func (app *rootCommand) sendE(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("failed to read body-file %q: %w", bodyFile, err)
 		}
+		// Expand environment variables in body file contents
+		expanded, err := vars.ExpandString(string(bodyBytes), vars.EnvResolver)
+		if err != nil {
+			return fmt.Errorf("body-file %q: %w", bodyFile, err)
+		}
+		bodyBytes = []byte(expanded)
 		req.Body = bytes.NewReader(bodyBytes)
 		req.Metadata["body_source"] = "body_file"
 		bodyLog = fmt.Sprintf("<body_file: %s (%d bytes)>", bodyFile, len(bodyBytes))

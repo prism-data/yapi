@@ -375,6 +375,7 @@ func RunChain(ctx context.Context, factory ExecutorFactory, base *config.ConfigV
 		}
 
 		// 4. Convert to domain request (handles ALL transports: HTTP, TCP, gRPC, GraphQL)
+		interpolatedConfig.SetResolver(chainCtx.Resolve)
 		req, err := interpolatedConfig.ToDomain()
 		if err != nil {
 			return nil, fmt.Errorf("step '%s': %w", step.Name, err)

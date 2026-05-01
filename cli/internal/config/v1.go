@@ -115,7 +115,8 @@ type ConfigV1 struct {
 	// Chain allows executing multiple dependent requests
 	Chain []ChainStep `yaml:"chain,omitempty"`
 
-	configPath string `yaml:"-"` // Path to this config file for resolving relative files
+	configPath string        `yaml:"-"` // Path to this config file for resolving relative files
+	resolver   vars.Resolver `yaml:"-"` // Resolver for variable expansion (used by prepareBody for body_file contents)
 }
 
 // WaitFor defines polling behavior for a request
@@ -306,12 +307,14 @@ func (a *AssertionSet) UnmarshalYAML(unmarshal func(interface{}) error) error {
 // ToDomain converts V1 YAML to the Canonical Config
 func (c *ConfigV1) ToDomain() (*domain.Request, error) {
 	c.expandEnvVars()
+	c.resolver = vars.EnvResolver
 	return c.toDomainInternal()
 }
 
 // ToDomainWithResolver converts V1 YAML using a custom resolver for variable expansion
 func (c *ConfigV1) ToDomainWithResolver(resolver vars.Resolver) (*domain.Request, error) {
 	c.ExpandWithResolver(resolver)
+	c.resolver = resolver
 	return c.toDomainInternal()
 }
 
@@ -353,6 +356,11 @@ func (c *ConfigV1) toDomainInternal() (*domain.Request, error) {
 // expandEnvVars expands environment variables in all string fields using reflection
 func (c *ConfigV1) expandEnvVars() {
 	vars.ExpandAll(c, vars.EnvResolver)
+}
+
+// SetResolver sets the variable resolver for body_file content expansion.
+func (c *ConfigV1) SetResolver(resolver vars.Resolver) {
+	c.resolver = resolver
 }
 
 // ExpandWithResolver expands environment variables using a custom resolver
@@ -402,6 +410,14 @@ func (c *ConfigV1) prepareBody() (io.Reader, string, error) {
 		bodyBytes, err := os.ReadFile(bodyPath) // #nosec G304 -- body_file is an explicit user-provided request payload path
 		if err != nil {
 			return nil, "", fmt.Errorf("failed to read body_file %q: %w", c.BodyFile, err)
+		}
+		// Expand variables in body file contents
+		if c.resolver != nil {
+			expanded, err := vars.ExpandString(string(bodyBytes), c.resolver)
+			if err != nil {
+				return nil, "", fmt.Errorf("body_file %q: %w", c.BodyFile, err)
+			}
+			bodyBytes = []byte(expanded)
 		}
 		return bytes.NewReader(bodyBytes), "body_file", nil
 	}

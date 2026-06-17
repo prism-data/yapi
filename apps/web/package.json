@@ -56,7 +56,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.0.5",
     "jsdom": "^27.2.0",
-    "markdown-it": "^14.1.0",
+    "markdown-it": "^14.2.0",
     "monaco-editor-webpack-plugin": "^7.1.1",
     "tailwindcss": "^4",
     "typescript": "^5",

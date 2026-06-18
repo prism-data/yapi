@@ -26,7 +26,7 @@
     "@types/react-syntax-highlighter": "^15.5.13",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.0.0",
-    "vite": "^6.0.0"
+    "vite": "^6.4.3"
   },
   "dependencies": {
     "@yapi/client": "workspace:*",

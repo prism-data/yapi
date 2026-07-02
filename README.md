@@ -165,10 +165,11 @@ yapi send 'tcp://tcpbin.com:4242' 'Hello from yapi!'
 **Flags:**
 - `-X, --method` - HTTP method (default: GET, or POST if body is provided)
 - `-H, --header` - Custom headers (repeatable, e.g. `-H 'Key: Value'`)
-- `--request-body-fixture-file` - Read request body from a file
 - `-v, --verbose` - Show request details, timing, and response headers
 - `--json` - Output full result as JSON with metadata
 - `--jq` - Apply a JQ filter to the response
+- `--request-body-fixture-file` - Read request body from a file
+- `--response-body-fixture-file` - Validate the response body from a file
 
 Transport is auto-detected from the URL scheme: `tcp://` for TCP, `grpc://` for gRPC, and HTTP by default.
 
@@ -276,7 +277,7 @@ body:
     - testing
 ```
 
-For larger or generated payloads, keep the body in a separate file:
+For larger or generated payloads, keep the request body in a separate file:
 
 ```yaml
 yapi: v1
@@ -285,6 +286,16 @@ method: POST
 content_type: application/json
 request_body_fixture_file: ./fixtures/create-post.json
 ```
+
+You can also place the response body in a separate file to be validated:
+
+**Response body fixture** - compare the final response body to a file:
+
+```yaml
+response_body_fixture_file: ./fixtures/users.response.json
+```
+
+JSON fixtures are compared as JSON, so whitespace and object key order do not matter. Non-JSON fixtures are compared exactly.
 
 ### 4\. Advanced Assertions
 

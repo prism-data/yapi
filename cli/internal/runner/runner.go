@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"time"
 
@@ -49,7 +50,7 @@ type Options struct {
 	EnvOverrides   map[string]string // Environment variables from project config
 	ProjectRoot    string            // Path to project root (for validation)
 	ProjectEnv     string            // Selected environment name (for validation)
-	ConfigFilePath string            // Path to the yapi config file (for relative output_file resolution)
+	ConfigFilePath string            // Path to the yapi config file (for relative file resolution)
 	StrictEnv      bool              // Strict env mode: error on missing env files, no OS env fallback
 }
 
@@ -414,6 +415,7 @@ func RunChain(ctx context.Context, factory ExecutorFactory, base *config.ConfigV
 			return nil, fmt.Errorf("step '%s': %w", step.Name, err)
 		}
 		expectRes := CheckExpectationsWithEnv(interpolatedExpect, result, opts.EnvOverrides)
+		expectRes = MergeExpectationResults(expectRes, CheckResponseBodyFixtureFile(result, interpolatedConfig.ResponseBodyFixtureFile, opts.ConfigFilePath))
 
 		// 8. Store Result (including expectation result even if failed)
 		chainCtx.AddResult(step.Name, result)
@@ -471,6 +473,9 @@ func logResolvedConfig(stepNum int, stepName string, cfg *config.ConfigV1) {
 	if cfg.BodyFile != "" {
 		fmt.Fprintf(os.Stderr, "[VERBOSE]   BodyFile: %s\n", cfg.BodyFile)
 	}
+	if cfg.ResponseBodyFixtureFile != "" {
+		fmt.Fprintf(os.Stderr, "[VERBOSE]   ResponseBodyFixtureFile: %s\n", cfg.ResponseBodyFixtureFile)
+	}
 	if cfg.Data != "" {
 		fmt.Fprintf(os.Stderr, "[VERBOSE]   Data: %s\n", truncateStr(cfg.Data))
 	}
@@ -501,6 +506,7 @@ func warnBareChainRefsInConfig(stepName string, cfg *config.ConfigV1) {
 	check("path", cfg.Path)
 	check("json", cfg.JSON)
 	check("request_body_fixture_file", cfg.BodyFile)
+	check("response_body_fixture_file", cfg.ResponseBodyFixtureFile)
 	check("data", cfg.Data)
 	for k, v := range cfg.Headers {
 		check(fmt.Sprintf("header '%s'", k), v)
@@ -653,6 +659,15 @@ func interpolateConfig(chainCtx *ChainContext, cfg *config.ConfigV1) (*config.Co
 		result.OutputFile = expanded
 	}
 
+	// Interpolate ResponseBodyFixtureFile
+	if result.ResponseBodyFixtureFile != "" {
+		expanded, err := chainCtx.ExpandVariables(result.ResponseBodyFixtureFile)
+		if err != nil {
+			return nil, fmt.Errorf("response_body_fixture_file: %w", err)
+		}
+		result.ResponseBodyFixtureFile = expanded
+	}
+
 	return &result, nil
 }
 
@@ -769,6 +784,111 @@ type ExpectationResult struct {
 // AllPassed returns true if all expectations passed
 func (e *ExpectationResult) AllPassed() bool {
 	return e.Error == nil
+}
+
+// MergeExpectationResults combines two expectation result sets.
+func MergeExpectationResults(a, b *ExpectationResult) *ExpectationResult {
+	if a == nil {
+		return b
+	}
+	if b == nil {
+		return a
+	}
+
+	a.AssertionsPassed += b.AssertionsPassed
+	a.AssertionsTotal += b.AssertionsTotal
+	a.AssertionResults = append(a.AssertionResults, b.AssertionResults...)
+	if b.StatusChecked {
+		a.StatusChecked = true
+		a.StatusPassed = b.StatusPassed
+	}
+	if a.Error == nil {
+		a.Error = b.Error
+	}
+	return a
+}
+
+// CheckResponseBodyFixtureFile compares the response body to a fixture file.
+func CheckResponseBodyFixtureFile(result *Result, fixturePath, configFilePath string) *ExpectationResult {
+	if fixturePath == "" {
+		return nil
+	}
+
+	expression := fmt.Sprintf("response_body_fixture_file == %s", fixturePath)
+	res := &ExpectationResult{
+		AssertionsTotal:  1,
+		AssertionResults: make([]AssertionResult, 0, 1),
+	}
+	ar := AssertionResult{Expression: expression}
+
+	resolvedPath := fixturePath
+	if !filepath.IsAbs(resolvedPath) && configFilePath != "" {
+		resolvedPath = filepath.Join(filepath.Dir(configFilePath), resolvedPath)
+	}
+
+	expectedBytes, err := os.ReadFile(resolvedPath) // #nosec G304 -- fixturePath is an explicit user-provided response fixture path
+	if err != nil {
+		ar.Error = fmt.Errorf("failed to read response_body_fixture_file %q: %w", fixturePath, err)
+		res.AssertionResults = append(res.AssertionResults, ar)
+		res.Error = ar.Error
+		return res
+	}
+
+	expected := string(expectedBytes)
+	ar.ExpectedValue = fmt.Sprintf("%d bytes", len(expected))
+	ar.ActualValue = fmt.Sprintf("%d bytes", len(result.Body))
+
+	if !responseBodiesMatch(result.Body, expected) {
+		ar.Error = fmt.Errorf("response body did not match fixture %q", fixturePath)
+		if strings.Contains(expected, "'") && responseBodiesMatch(result.Body, strings.ReplaceAll(expected, "'", `"`)) {
+			ar.Error = fmt.Errorf("%w; fixture would match if single quotes were replaced with double quotes", ar.Error)
+		}
+		res.AssertionResults = append(res.AssertionResults, ar)
+		res.Error = ar.Error
+		return res
+	}
+
+	ar.Passed = true
+	res.AssertionsPassed = 1
+	res.AssertionResults = append(res.AssertionResults, ar)
+	return res
+}
+
+func responseBodiesMatch(actual, expected string) bool {
+	if actual == expected {
+		return true
+	}
+
+	actualJSON, err := decodeJSONBody(actual)
+	if err != nil {
+		return false
+	}
+	expectedJSON, err := decodeJSONBody(expected)
+	if err != nil {
+		return false
+	}
+
+	return reflect.DeepEqual(actualJSON, expectedJSON)
+}
+
+func decodeJSONBody(body string) (any, error) {
+	dec := json.NewDecoder(strings.NewReader(body))
+	dec.UseNumber()
+
+	var value any
+	if err := dec.Decode(&value); err != nil {
+		return nil, err
+	}
+
+	var extra any
+	if err := dec.Decode(&extra); err != io.EOF {
+		if err == nil {
+			return nil, fmt.Errorf("multiple JSON values")
+		}
+		return nil, err
+	}
+
+	return value, nil
 }
 
 // checkStatusMatch checks if the actual status code matches the expected status

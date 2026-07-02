@@ -21,38 +21,39 @@ import (
 // knownV1Keys is the set of valid keys for v1 config files.
 // Must be kept in sync with ConfigV1 struct yaml tags.
 var knownV1Keys = map[string]bool{
-	"yapi":                      true,
-	"url":                       true,
-	"path":                      true,
-	"method":                    true,
-	"content_type":              true,
-	"headers":                   true,
-	"body":                      true,
-	"request_body_fixture_file": true,
-	"json":                      true,
-	"form":                      true,
-	"query":                     true,
-	"graphql":                   true,
-	"variables":                 true,
-	"service":                   true,
-	"rpc":                       true,
-	"proto":                     true,
-	"proto_path":                true,
-	"data":                      true,
-	"encoding":                  true,
-	"jq_filter":                 true,
-	"insecure":                  true,
-	"plaintext":                 true,
-	"read_timeout":              true,
-	"idle_timeout":              true,
-	"close_after_send":          true,
-	"chain":                     true,
-	"expect":                    true,
-	"delay":                     true,
-	"output_file":               true,
-	"timeout":                   true,
-	"env_files":                 true,
-	"wait_for":                  true,
+	"yapi":                       true,
+	"url":                        true,
+	"path":                       true,
+	"method":                     true,
+	"content_type":               true,
+	"headers":                    true,
+	"body":                       true,
+	"request_body_fixture_file":  true,
+	"json":                       true,
+	"form":                       true,
+	"query":                      true,
+	"graphql":                    true,
+	"variables":                  true,
+	"service":                    true,
+	"rpc":                        true,
+	"proto":                      true,
+	"proto_path":                 true,
+	"data":                       true,
+	"encoding":                   true,
+	"jq_filter":                  true,
+	"insecure":                   true,
+	"plaintext":                  true,
+	"read_timeout":               true,
+	"idle_timeout":               true,
+	"close_after_send":           true,
+	"chain":                      true,
+	"expect":                     true,
+	"delay":                      true,
+	"output_file":                true,
+	"response_body_fixture_file": true,
+	"timeout":                    true,
+	"env_files":                  true,
+	"wait_for":                   true,
 }
 
 // FindUnknownKeys checks a raw map for keys not in knownV1Keys.
@@ -101,7 +102,8 @@ type ConfigV1 struct {
 	Timeout string `yaml:"timeout,omitempty"` // HTTP request timeout (e.g. "4s", "100ms", "1m")
 
 	// Output
-	OutputFile string `yaml:"output_file,omitempty"` // Save response to file (e.g. "./output.json", "./image.png")
+	OutputFile              string `yaml:"output_file,omitempty"`                // Save response to file (e.g. "./output.json", "./image.png")
+	ResponseBodyFixtureFile string `yaml:"response_body_fixture_file,omitempty"` // Compare response body to fixture file
 
 	// Environment
 	EnvFiles []string `yaml:"env_files,omitempty"` // Paths to .env files to load variables from
@@ -166,6 +168,7 @@ func (c *ConfigV1) Merge(step ChainStep) ConfigV1 {
 	m.Delay = utils.Coalesce(step.Delay, c.Delay)
 	m.Timeout = utils.Coalesce(step.Timeout, c.Timeout)
 	m.OutputFile = utils.Coalesce(step.OutputFile, c.OutputFile)
+	m.ResponseBodyFixtureFile = utils.Coalesce(step.ResponseBodyFixtureFile, c.ResponseBodyFixtureFile)
 
 	// Bool/Int overrides
 	if step.Insecure {
@@ -225,6 +228,7 @@ func (c *ConfigV1) MergeWithDefaults(defaults ConfigV1) ConfigV1 {
 	m.Delay = utils.Coalesce(c.Delay, defaults.Delay)
 	m.Timeout = utils.Coalesce(c.Timeout, defaults.Timeout)
 	m.OutputFile = utils.Coalesce(c.OutputFile, defaults.OutputFile)
+	m.ResponseBodyFixtureFile = utils.Coalesce(c.ResponseBodyFixtureFile, defaults.ResponseBodyFixtureFile)
 
 	// Bool/Int overrides - file values take precedence
 	if c.Insecure {
@@ -522,6 +526,10 @@ func (c *ConfigV1) enrichMetadata(req *domain.Request) error {
 
 	if c.OutputFile != "" {
 		req.Metadata["output_file"] = c.OutputFile
+	}
+
+	if c.ResponseBodyFixtureFile != "" {
+		req.Metadata["response_body_fixture_file"] = c.ResponseBodyFixtureFile
 	}
 
 	if c.Timeout != "" {

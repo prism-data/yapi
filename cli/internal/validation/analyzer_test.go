@@ -429,6 +429,24 @@ headers:
 	}
 }
 
+func TestAnalyzeConfig_ResponseBodyFixtureFileKnownKey(t *testing.T) {
+	yaml := `yapi: v1
+url: http://example.com
+method: GET
+response_body_fixture_file: fixtures/response.json`
+
+	a, err := Analyze(yaml, AnalyzeOptions{})
+	if err != nil {
+		t.Fatalf("Analyze error: %v", err)
+	}
+
+	for _, d := range a.Diagnostics {
+		if d.Field == "response_body_fixture_file" && strings.Contains(d.Message, "unknown key") {
+			t.Fatalf("unexpected unknown key warning: %+v", d)
+		}
+	}
+}
+
 // Tests for GraphQL variables vs environment variables detection
 
 func TestFindEnvVarRefs_GraphQLVariablesNotDetected(t *testing.T) {

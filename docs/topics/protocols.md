@@ -21,14 +21,14 @@ expect:
   status: 201
 ```
 
-Use `request_body_fixture_file` when the payload should live outside YAML:
+Use `body_file` when the payload should live outside YAML:
 
 ```yaml
 yapi: v1
 url: https://api.example.com/users
 method: POST
 content_type: application/json
-request_body_fixture_file: ./fixtures/create-user.json
+body_file: ./fixtures/create-user.json
 ```
 
 ### Form Data
@@ -86,7 +86,7 @@ yapi: v1
 url: grpc://localhost:50051
 service: helloworld.Greeter
 rpc: SayHello
-request_body_fixture_file: ./fixtures/say-hello.json
+body_file: ./fixtures/say-hello.json
 ```
 
 ### Metadata

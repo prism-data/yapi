@@ -438,9 +438,9 @@ func validateChain(text string, base *config.ConfigV1, chain []config.ChainStep)
 			diags = append(diags, scanForUndefinedRefs(text, step.JSON, definedSteps, step.Name, "json")...)
 		}
 
-		// Check request_body_fixture_file field
+		// Check body_file field
 		if step.BodyFile != "" {
-			diags = append(diags, scanForUndefinedRefs(text, step.BodyFile, definedSteps, step.Name, "request_body_fixture_file")...)
+			diags = append(diags, scanForUndefinedRefs(text, step.BodyFile, definedSteps, step.Name, "body_file")...)
 		}
 
 		// Check Variables

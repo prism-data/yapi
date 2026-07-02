@@ -443,6 +443,11 @@ func validateChain(text string, base *config.ConfigV1, chain []config.ChainStep)
 			diags = append(diags, scanForUndefinedRefs(text, step.BodyFile, definedSteps, step.Name, "request_body_fixture_file")...)
 		}
 
+		// Check response_body_fixture_file field
+		if step.ResponseBodyFixtureFile != "" {
+			diags = append(diags, scanForUndefinedRefs(text, step.ResponseBodyFixtureFile, definedSteps, step.Name, "response_body_fixture_file")...)
+		}
+
 		// Check Variables
 		for k, v := range step.Variables {
 			if s, ok := v.(string); ok {

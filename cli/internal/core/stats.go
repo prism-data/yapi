@@ -26,16 +26,22 @@ func ExtractConfigStats(analysis *validation.Analysis) map[string]any {
 	stats["chain_step_count"] = len(analysis.Chain)
 
 	// Expectations
-	hasExpectations := analysis.Expect.Status != nil || len(analysis.Expect.Assert.Body) > 0 || len(analysis.Expect.Assert.Headers) > 0
+	hasExpectations := analysis.Expect.Status != nil || len(analysis.Expect.Assert.Body) > 0 || len(analysis.Expect.Assert.Headers) > 0 || base.ResponseBodyFixtureFile != ""
 	assertionCount := len(analysis.Expect.Assert.Body) + len(analysis.Expect.Assert.Headers)
+	if base.ResponseBodyFixtureFile != "" {
+		assertionCount++
+	}
 	hasStatusCheck := analysis.Expect.Status != nil
 
 	// Count expectations across chain steps too
 	for _, step := range analysis.Chain {
-		if step.Expect.Status != nil || len(step.Expect.Assert.Body) > 0 || len(step.Expect.Assert.Headers) > 0 {
+		if step.Expect.Status != nil || len(step.Expect.Assert.Body) > 0 || len(step.Expect.Assert.Headers) > 0 || step.ResponseBodyFixtureFile != "" {
 			hasExpectations = true
 		}
 		assertionCount += len(step.Expect.Assert.Body) + len(step.Expect.Assert.Headers)
+		if step.ResponseBodyFixtureFile != "" {
+			assertionCount++
+		}
 		if step.Expect.Status != nil {
 			hasStatusCheck = true
 		}
@@ -93,7 +99,7 @@ func collectStrings(base *config.ConfigV1, chain []config.ChainStep) []string {
 		base.URL, base.Path, base.Method, base.ContentType,
 		base.JSON, base.Graphql, base.Service, base.RPC,
 		base.Proto, base.ProtoPath, base.Data, base.Encoding, base.JQFilter,
-		base.Delay,
+		base.Delay, base.OutputFile, base.ResponseBodyFixtureFile,
 	}
 
 	for _, v := range base.Headers {
@@ -112,7 +118,7 @@ func collectStrings(base *config.ConfigV1, chain []config.ChainStep) []string {
 			step.URL, step.Path, step.Method, step.ContentType,
 			step.JSON, step.Graphql, step.Service, step.RPC,
 			step.Proto, step.ProtoPath, step.Data, step.Encoding, step.JQFilter,
-			step.Delay,
+			step.Delay, step.OutputFile, step.ResponseBodyFixtureFile,
 		)
 		for _, v := range step.Headers {
 			strs = append(strs, v)

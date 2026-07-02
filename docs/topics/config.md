@@ -88,6 +88,7 @@ request_body_fixture_file: ./fixtures/import.json
 |---|---|---|
 | `jq_filter` | string | JQ expression to transform response |
 | `output_file` | string | Save response body to file |
+| `response_body_fixture_file` | string | Compare response body to a fixture file, resolved relative to the request file |
 | `content_type` | string | Override content type |
 
 ## GraphQL Fields
@@ -126,6 +127,7 @@ For gRPC requests, values in `headers` are sent as request metadata. Use lowerca
 | `expect` | object | Status and assertion expectations |
 | `expect.status` | int/[]int | Expected status code(s) |
 | `expect.assert` | list/map | Body and header assertions |
+| `response_body_fixture_file` | string | Response body fixture assertion |
 | `wait_for` | object | Polling configuration |
 | `chain` | list | Multi-step request chain |
 

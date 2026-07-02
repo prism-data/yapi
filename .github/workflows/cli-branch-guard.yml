@@ -16,15 +16,9 @@ jobs:
       - name: Fail if cli/ changed
         run: |
           BASE="${{ github.base_ref }}"
-          HEAD="${{ github.head_ref }}"
 
           if [ "$BASE" != "main" ]; then
             echo "PR targets '$BASE', not main. Branch guard skipped."
-            exit 0
-          fi
-
-          if [ "$HEAD" = "next" ]; then
-            echo "PR promotes next to main. Branch guard satisfied."
             exit 0
           fi
 

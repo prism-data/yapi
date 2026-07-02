@@ -197,6 +197,12 @@ func (e *Engine) executeRequest(ctx context.Context, analysis *validation.Analys
 	if result != nil && (analysis.Expect.Status != nil || len(analysis.Expect.Assert.Body) > 0 || len(analysis.Expect.Assert.Headers) > 0) {
 		expectRes = runner.CheckExpectationsWithEnv(analysis.Expect, result, opts.EnvOverrides)
 	}
+	if result != nil {
+		expectRes = runner.MergeExpectationResults(
+			expectRes,
+			runner.CheckResponseBodyFixtureFile(result, analysis.Request.Metadata["response_body_fixture_file"], opts.ConfigFilePath),
+		)
+	}
 
 	e.recordStats(stats, start, runErr, expectRes)
 

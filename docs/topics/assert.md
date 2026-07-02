@@ -54,6 +54,16 @@ assert:
   - .count | type == "number"
 ```
 
+## Response Body Fixtures
+
+Use `response_body_fixture_file` to compare the final response body against a file:
+
+```yaml
+response_body_fixture_file: ./fixtures/get-user.response.json
+```
+
+The fixture path is resolved relative to the request file. If `jq_filter` is set, yapi compares the filtered body. JSON fixtures are compared as JSON, so whitespace and object key order do not matter. Non-JSON fixtures are compared exactly.
+
 ## Environment Variable References
 
 Compare response values against environment variables using `env.VAR_NAME`:

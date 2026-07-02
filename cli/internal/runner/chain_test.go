@@ -3,6 +3,8 @@ package runner
 import (
 	"context"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -16,6 +18,80 @@ import (
 // CheckExpectations is a test helper that wraps CheckExpectationsWithEnv with nil environment
 func CheckExpectations(expect config.Expectation, result *Result) *ExpectationResult {
 	return CheckExpectationsWithEnv(expect, result, nil)
+}
+
+func TestCheckResponseBodyFixtureFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "request.yapi.yml")
+	fixturePath := filepath.Join(tmpDir, "fixtures", "response.json")
+	singleQuotedFixturePath := filepath.Join(tmpDir, "fixtures", "single-quoted.json")
+	if err := os.MkdirAll(filepath.Dir(fixturePath), 0750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(fixturePath, []byte(`{"ok":true,"id":1}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(singleQuotedFixturePath, []byte(`{'ok':true}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name            string
+		body            string
+		fixturePath     string
+		wantErr         bool
+		wantErrContains string
+	}{
+		{
+			name:        "matches relative fixture",
+			body:        `{"ok":true,"id":1}`,
+			fixturePath: "fixtures/response.json",
+			wantErr:     false,
+		},
+		{
+			name:        "matches json with different whitespace",
+			body:        "{\n  \"id\": 1,\n  \"ok\": true\n}",
+			fixturePath: "fixtures/response.json",
+			wantErr:     false,
+		},
+		{
+			name:        "mismatch",
+			body:        `{"ok":false,"id":1}`,
+			fixturePath: "fixtures/response.json",
+			wantErr:     true,
+		},
+		{
+			name:            "single quoted fixture hint",
+			body:            `{"ok":true}`,
+			fixturePath:     "fixtures/single-quoted.json",
+			wantErr:         true,
+			wantErrContains: "single quotes were replaced with double quotes",
+		},
+		{
+			name:        "missing fixture",
+			body:        `{"ok":true,"id":1}`,
+			fixturePath: "fixtures/missing.json",
+			wantErr:     true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res := CheckResponseBodyFixtureFile(&Result{Body: tt.body}, tt.fixturePath, configPath)
+			if res == nil {
+				t.Fatal("CheckResponseBodyFixtureFile() returned nil")
+			}
+			if (res.Error != nil) != tt.wantErr {
+				t.Fatalf("CheckResponseBodyFixtureFile() error = %v, wantErr %v", res.Error, tt.wantErr)
+			}
+			if tt.wantErrContains != "" && !strings.Contains(res.Error.Error(), tt.wantErrContains) {
+				t.Fatalf("CheckResponseBodyFixtureFile() error = %v, want to contain %q", res.Error, tt.wantErrContains)
+			}
+			if res.AssertionsTotal != 1 {
+				t.Fatalf("AssertionsTotal = %d, want 1", res.AssertionsTotal)
+			}
+		})
+	}
 }
 
 func TestCheckExpectations_Status(t *testing.T) {

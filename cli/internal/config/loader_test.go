@@ -229,6 +229,25 @@ json: '{"name":"inline"}'`
 	}
 }
 
+func TestLoadFromStringWithPath_ResponseBodyFixtureFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	yapiContent := `yapi: v1
+url: https://example.com/users
+method: GET
+response_body_fixture_file: fixtures/users.json`
+
+	result, err := LoadFromStringWithPath(yapiContent, tmpDir+"/request.yapi.yml", nil, nil)
+	if err != nil {
+		t.Fatalf("LoadFromStringWithPath() failed: %v", err)
+	}
+	if result == nil || result.Request == nil {
+		t.Fatal("LoadFromStringWithPath() returned nil result or request")
+	}
+	if result.Request.Metadata["response_body_fixture_file"] != "fixtures/users.json" {
+		t.Errorf("response_body_fixture_file metadata = %q, want fixtures/users.json", result.Request.Metadata["response_body_fixture_file"])
+	}
+}
+
 func TestLoadFromStringWithPath_EnvFiles_MultipleFiles(t *testing.T) {
 	// Create a temporary directory for our test files
 	tmpDir, err := os.MkdirTemp("", "yapi-envfiles-multi-test-*")

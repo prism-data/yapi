@@ -438,6 +438,7 @@ var topLevelKeys = []struct {
 	{"content_type", "Content-Type header value"},
 	{"body", "Request body as key-value pairs"},
 	{"request_body_fixture_file", "Path to a raw request body file"},
+	{"response_body_fixture_file", "Path to an expected response body fixture file"},
 	{"json", "Raw JSON string for request body"},
 	{"query", "Query parameters as key-value pairs"},
 	{"graphql", "GraphQL query or mutation (multiline string)"},

@@ -135,7 +135,7 @@
   },
   "dependencies": {
     "@yapi/client": "workspace:*",
-    "js-yaml": "^4.1.0",
+    "js-yaml": "^4.2.0",
     "vscode-languageclient": "^9.0.1"
   }
 }
